@@ -1,0 +1,2991 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{THEME}}" data-page="guest">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <title>{{COUPLE}} · Share your photos</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* Decorative artwork a theme can draw (see THEMES in src/worker.js). */
+    .theme-scene { display: none; }
+
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #faf6f0;
+      --bg-card: #fffdf9;
+      --bg-input: #fafafa;
+      --bg-subtle: #f5f5f5;
+      --text-primary: #1a1a1a;
+      --text-secondary: #888;
+      --text-tertiary: #aaa;
+      --border: #ebebeb;
+      --border-strong: #ddd;
+      --accent-bg: #EEEDFE;
+      --accent-border: #AFA9EC;
+      --accent-text: #3C3489;
+      --accent-btn: #534AB7;
+      /* Fixed-strength accent for icons drawn on --accent-bg. */
+      --accent-strong: #534AB7;
+      /* Text on an --accent-btn fill. */
+      --on-accent: #ffffff;
+      --green-bg: #E1F5EE;
+      --success-icon: #0F6E56;
+      /* The liked button in the photo viewer, which is always on black. */
+      --like-fill: #d63a66;
+      --on-like: #ffffff;
+      /* Upload-complete confetti, read by launchConfetti(). */
+      --confetti-colors: #534AB7, #AFA9EC, #0F6E56, #EF9F27, #E24B4A, #F09595;
+      --red-bg: #FCEBEB;
+      --red-border: #F09595;
+      --red-text: #A32D2D;
+      --amber-bg: #FAEEDA;
+      --amber-border: #EF9F27;
+      --amber-text: #633806;
+      --amber-warn: #E89B2A;
+      --skeleton-base: #ececec;
+      --skeleton-sheen: rgba(255,255,255,0.9);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #1a1a1a;
+        --bg-secondary: #1a1a1a;
+        --bg-card: #2a2a2a;
+        --bg-input: #2a2a2a;
+        --bg-subtle: #333;
+        --text-primary: #f0f0f0;
+        --text-secondary: #999;
+        --text-tertiary: #666;
+        --border: #3a3a3a;
+        --border-strong: #444;
+        --accent-bg: #2d2b4a;
+        --accent-border: #7F77DD;
+        --accent-text: #AFA9EC;
+        --accent-btn: #6860cc;
+        --green-bg: #0d3326;
+        --red-bg: #2a0a0a;
+        --red-border: #5a1a1a;
+        --red-text: #F09595;
+        --amber-bg: #2a1f0a;
+        --amber-border: #5a3f0a;
+        --amber-text: #FAC775;
+        --amber-warn: #FAC775;
+        --skeleton-base: #303030;
+        --skeleton-sheen: rgba(255,255,255,0.08);
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 0;
+    }
+    .page { display: none; }
+    .page.active { display: block; }
+
+    .upload-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+    .card {
+      background: var(--bg-card);
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      padding: 32px 24px;
+      width: 100%;
+      max-width: 420px;
+    }
+    .header { text-align: center; margin-bottom: 28px; }
+    .header h1 {
+      font-size: 26px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      letter-spacing: 0.02em;
+    }
+    .header p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      font-style: italic;
+      letter-spacing: 0.03em;
+    }
+    .step { display: none; }
+    .step.active { display: block; }
+    .progress {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+    .progress-dot {
+      height: 4px;
+      border-radius: 2px;
+      background: var(--border);
+      flex: 1;
+      transition: background 0.3s;
+    }
+    .progress-dot.done { background: var(--accent-btn); }
+    .upload-zone {
+      border: 2px dashed var(--border-strong);
+      border-radius: 16px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      margin-bottom: 16px;
+    }
+    .upload-zone:active { border-color: var(--accent-border); }
+    .upload-icon {
+      width: 52px;
+      height: 52px;
+      background: var(--accent-bg);
+      color: var(--accent-strong);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 12px;
+    }
+    .upload-zone h2 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .upload-zone p { font-size: 14px; color: var(--text-secondary); }
+    .upload-zone .upload-note { color: var(--text-tertiary); margin-top: 8px; text-wrap: balance; }
+    .upload-zone .upload-note-warn { color: var(--amber-warn); margin-top: 6px; }
+    .view-gallery-link {
+      display: block;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--accent-text);
+      text-decoration: none;
+      margin-top: 12px;
+      cursor: pointer;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1.5px solid var(--accent-border);
+      background: var(--accent-bg);
+    }
+    .share-link {
+      display: block;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-decoration: none;
+      margin-top: 10px;
+      cursor: pointer;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1.5px solid var(--border);
+      background: var(--bg-card);
+    }
+    .privacy-link {
+      display: block;
+      text-align: center;
+      font-size: 14px;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      padding: 12px 0 0;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .privacy-content {
+      margin-top: 10px;
+      padding: 16px;
+      background: var(--bg-subtle);
+      border-radius: 14px;
+    }
+    .privacy-content p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      margin-bottom: 10px;
+    }
+    .privacy-content p:last-child { margin-bottom: 0; }
+    .thumbs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .thumb {
+      width: 100%;
+      aspect-ratio: 1;
+      height: auto;
+      border-radius: 10px;
+      object-fit: cover;
+      border: 1px solid var(--border);
+    }
+    .thumb-more {
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      aspect-ratio: 1;
+      height: auto;
+      border-radius: 10px;
+      background: var(--bg-subtle);
+    }
+    .thumb-peek {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .thumb-more-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.42);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    label.field-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: var(--text-primary);
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 13px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border-strong);
+      font-size: 16px;
+      background: var(--bg-input);
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent-border);
+    }
+    input[type="text"]::placeholder { color: var(--text-tertiary); }
+    .loc-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .loc-btn {
+      padding: 16px 10px;
+      border-radius: 14px;
+      border: 1.5px solid var(--border);
+      background: var(--bg-card);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-align: center;
+      cursor: pointer;
+      line-height: 1.4;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      /* Centred, so a location without an emoji still lines up with its neighbour. */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      overflow-wrap: break-word;
+    }
+    .loc-btn.selected {
+      background: var(--accent-bg);
+      border-color: var(--accent-border);
+      color: var(--accent-text);
+    }
+    .loc-btn span { display: block; font-size: 18px; margin-bottom: 4px; }
+    /* Locations number 1–4. An odd one out spans the row, so 1 or 3 never
+       leave a gap; layout stays in CSS so a theme can change it freely. */
+    .loc-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+    .btn-primary {
+      width: 100%;
+      padding: 15px;
+      border-radius: 14px;
+      border: none;
+      background: var(--accent-btn);
+      color: var(--on-accent);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-primary:disabled { background: var(--border); color: var(--text-tertiary); }
+    .btn-back {
+      display: block;
+      text-align: center;
+      font-size: 14px;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      margin-top: 12px;
+      padding: 10px 0;
+    }
+    .progress-bar-wrap {
+      background: var(--border);
+      border-radius: 4px;
+      height: 4px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--accent-btn);
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.3s;
+    }
+    .success { text-align: center; padding: 16px 0; }
+    .success-icon {
+      width: 64px;
+      height: 64px;
+      background: var(--green-bg);
+      color: var(--success-icon);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+    }
+    .success h2 { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+    .success p { font-size: 14px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 20px; }
+    .btn-secondary {
+      width: 100%;
+      padding: 15px;
+      border-radius: 14px;
+      border: 1.5px solid var(--border);
+      background: var(--bg-card);
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text-primary);
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .upload-error {
+      background: var(--red-bg);
+      border: 1px solid var(--red-border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 14px;
+      color: var(--red-text);
+      margin-bottom: 16px;
+      display: none;
+      text-align: center;
+      line-height: 1.5;
+    }
+    .upload-error.visible { display: block; }
+    .file-warning {
+      background: var(--amber-bg);
+      border: 1px solid var(--amber-border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 14px;
+      color: var(--amber-text);
+      margin-bottom: 16px;
+      display: none;
+      text-align: center;
+      line-height: 1.5;
+    }
+    .file-warning.visible { display: block; }
+    .retry-btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1.5px solid var(--accent-btn);
+      background: var(--bg-card);
+      color: var(--accent-btn);
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 10px;
+      display: none;
+    }
+    .retry-btn.visible { display: block; }
+    .retry-btn:disabled { opacity: 0.5; cursor: default; }
+
+    .gallery-page { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
+    .gallery-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .gallery-header h1 { font-size: 20px; font-weight: 600; }
+    .gallery-header p { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+    .leaderboard-link {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--accent-text);
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .add-photos-btn {
+      padding: 10px 16px;
+      border-radius: 12px;
+      border: none;
+      background: var(--accent-btn);
+      color: var(--on-accent);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .gallery-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .sort-toggle {
+      font-size: 12px;
+      color: var(--accent-text);
+      cursor: pointer;
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--accent-border);
+      background: var(--accent-bg);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .refresh-btn {
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      font-weight: 500;
+    }
+    .filter-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .filter-pill {
+      padding: 7px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      text-align: center;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .filter-row > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+    .filter-pill.active {
+      background: var(--accent-bg);
+      border-color: var(--accent-border);
+      color: var(--accent-text);
+      font-weight: 500;
+    }
+    .photo-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 3px;
+    }
+    #scrollSentinel { grid-column: 1 / -1; height: 1px; }
+    .photo-item {
+      aspect-ratio: 1;
+      position: relative;
+      overflow: hidden;
+      border-radius: 12px;
+      background: var(--bg-subtle);
+      cursor: pointer;
+    }
+    .photo-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: opacity 0.25s ease;
+    }
+    /* A photo uploaded seconds ago often has no stored thumbnail yet — the queue
+       is still building it, or /v/ is transforming it on demand — so its tile
+       can sit empty for several seconds. That is exactly the walk from the
+       upload-complete screen into the gallery, where a grid of blank squares
+       reads as "my photos didn't arrive". The shimmer says "working" instead,
+       and clears the moment the thumbnail paints. */
+    .photo-item.loading { background: var(--skeleton-base); }
+    .photo-item.loading img { opacity: 0; }
+    /* The sheen sweeps on transform rather than background-position: a page
+       holds 30 tiles and most of them are below the fold shimmering away, so
+       this has to stay on the compositor instead of repainting every frame.
+       .photo-item already clips it. */
+    .photo-item.loading::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: -100%;
+      width: 100%;
+      background: linear-gradient(100deg, transparent, var(--skeleton-sheen), transparent);
+      animation: tileShimmer 1.5s ease-in-out infinite;
+    }
+    @keyframes tileShimmer {
+      to { transform: translateX(200%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .photo-item img { transition: none; }
+      .photo-item.loading::after { animation: none; left: 0; opacity: 0.4; }
+    }
+    .photo-item .photo-info {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(transparent, rgba(0,0,0,0.5));
+      padding: 16px 6px 5px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .photo-item:hover .photo-info { opacity: 1; }
+    .photo-info span {
+      font-size: 10px;
+      color: white;
+      display: block;
+    }
+    .loading-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-tertiary);
+      font-size: 14px;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-tertiary);
+    }
+    .empty-state p { font-size: 14px; margin-bottom: 16px; }
+    .lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.92);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      padding: 20px;
+      /* The lightbox handles every gesture itself, pinch included. Left to the
+         browser, a pinch zooms the whole page: the fixed overlay ends up
+         mis-sized and the guest is stranded in a half-zoomed gallery. */
+      touch-action: none;
+    }
+    .lightbox.open { display: flex; }
+    /* A zoomed photo may spill past its box over the name and status lines; the
+       close and arrow buttons sit above it so there is always a way out. */
+    .lightbox.zoomed .lightbox-inner { overflow: visible; }
+    .lightbox-inner {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      max-height: 75vh;
+      overflow: hidden;
+    }
+    .lightbox-inner img {
+      max-width: 100%;
+      max-height: 75vh;
+      object-fit: contain;
+      border-radius: 8px;
+      user-select: none;
+      will-change: transform;
+    }
+    #lightboxPreload {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .lightbox-spinner {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 2;
+    }
+    .lightbox-spinner.visible { display: block; }
+    .lightbox-spinner-ring {
+      width: 38px;
+      height: 38px;
+      border: 3px solid rgba(255,255,255,0.18);
+      border-top-color: rgba(255,255,255,0.85);
+      border-radius: 50%;
+      animation: lbspin 0.75s linear infinite;
+    }
+    @keyframes lbspin { to { transform: rotate(360deg); } }
+    .lightbox-info {
+      color: white;
+      text-align: center;
+      margin-top: 12px;
+    }
+    .lightbox-info p { font-size: 14px; margin-bottom: 4px; }
+    .lightbox-info span { font-size: 12px; color: #aaa; }
+    .lightbox-info .couple-pick { font-size: 12px; color: #f3d38b; margin-bottom: 4px; }
+    .like-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.08);
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .like-btn .like-icon { font-size: 16px; line-height: 1; display: inline-block; }
+    /* Liked is a filled button, not just a filled heart, so the state reads at a glance. */
+    .like-btn.liked {
+      background: var(--like-fill);
+      border-color: var(--like-fill);
+      color: var(--on-like);
+      font-weight: 600;
+    }
+    .like-btn:disabled { opacity: 0.7; }
+    .like-btn[hidden] { display: none; }
+    .like-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .like-row .like-btn { margin-top: 0; }
+    /* Fixed-width digits, so 9 → 10 doesn't nudge the label. */
+    .like-count { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .like-count[hidden] { display: none; }
+    .own-photo-note {
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.75);
+      font-size: 14px;
+    }
+    /* One small pop when a like lands, confirming the tap. */
+    .like-icon.pop { animation: likePop 0.35s ease-out; }
+    @keyframes likePop {
+      0% { transform: scale(1); }
+      45% { transform: scale(1.4); }
+      100% { transform: scale(1); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .like-icon.pop { animation: none; }
+    }
+    .like-name-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 150;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .like-name-overlay.open { display: flex; }
+    .like-name-card {
+      width: 100%;
+      max-width: 360px;
+      background: var(--bg-card);
+      border-radius: 18px;
+      padding: 24px 20px 12px;
+    }
+    .like-name-card h3 { font-size: 18px; color: var(--text-primary); margin-bottom: 6px; }
+    .like-name-card p { font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; }
+    .like-name-card input { margin-bottom: 12px; }
+    .photo-item .pick-badge {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      padding: 3px 8px;
+      border-radius: 10px;
+      background: rgba(0,0,0,0.55);
+      color: white;
+      font-size: 11px;
+      pointer-events: none;
+    }
+    .lightbox-close {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      color: white;
+      font-size: 28px;
+      cursor: pointer;
+      line-height: 1;
+      background: none;
+      border: none;
+      padding: 8px;
+      z-index: 2;
+    }
+    @media (max-height: 500px) {
+      .lightbox { padding: 6px 20px; }
+      .lightbox-inner { max-height: 55vh; }
+      .lightbox-inner img { max-height: 55vh; }
+      .lightbox-info { margin-top: 5px; }
+      .lightbox-info p { font-size: 12px; margin-bottom: 2px; }
+      .lightbox-actions { margin-top: 4px; }
+      .lightbox-save-tip { font-size: 11px; }
+      .lightbox-full-btn { padding: 7px 16px; font-size: 13px; }
+    }
+    .lightbox-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: white;
+      font-size: 36px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      z-index: 1;
+    }
+    .lightbox-nav.left { left: 16px; }
+    .lightbox-nav.right { right: 16px; }
+    /* The pill and the save tip share one grid cell, so the row is always as tall
+       as the taller of the two and swapping between them never reflows the
+       column. Both hide with opacity/visibility rather than display:none —
+       display:none would collapse the row and jostle the photo. */
+    .lightbox-actions {
+      display: grid;
+      place-items: center;
+      margin-top: 10px;
+      width: 100%;
+      /* Fits the tallest state (the tappable data-saver offer), so swapping
+         between status text, the save tip and that offer never moves the photo. */
+      min-height: 44px;
+    }
+    .lightbox-actions > * {
+      grid-area: 1 / 1;
+      margin: 0;
+      max-width: 100%;
+    }
+    .lightbox-save-tip {
+      font-size: 12px;
+      color: #aaa;
+      text-align: center;
+      transition: opacity 0.4s ease;
+    }
+    .lightbox-save-tip.hidden {
+      opacity: 0;
+      transition: none;
+    }
+    /* Status line for the full-quality fetch. Deliberately not a button: the
+       download happens on its own after a short pause, so there is nothing to
+       decide — only something to report. */
+    .lightbox-status {
+      font-size: 12px;
+      color: #aaa;
+      text-align: center;
+      transition: opacity 0.3s ease;
+    }
+    .lightbox-status.hidden { opacity: 0; transition: none; }
+    /* The one case that still needs an action: data-saver mode skips the
+       automatic fetch, so the guest has to ask for it. */
+    .lightbox-status.tappable {
+      color: white;
+      background: rgba(255,255,255,0.15);
+      border-radius: 20px;
+      padding: 10px 20px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+  .confetti-piece {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    top: -10px;
+    opacity: 0;
+    animation: confettiFall 2.5s ease-in forwards;
+  }
+  @keyframes confettiFall {
+    0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(400px) rotate(720deg); opacity: 0; }
+  }
+  .rankings-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: var(--bg-secondary);
+    z-index: 300;
+    overflow-y: auto;
+    padding: 24px 16px;
+  }
+  .rankings-overlay.open { display: block; }
+  .rankings-overlay-header {
+    max-width: 480px;
+    margin: 0 auto 24px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .rankings-overlay-header h2 {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+  .rankings-overlay-header p {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .rankings-close {
+    padding: 8px 16px;
+    border-radius: 12px;
+    border: 1.5px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .rankings-section {
+    max-width: 480px;
+    margin: 0 auto 24px;
+  }
+  .rankings-section h3 {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 12px;
+  }
+  .rankings-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    max-width: 480px;
+    margin: 0 auto 20px;
+  }
+  .rankings-stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    text-align: center;
+  }
+  .rankings-stat-card .rsc-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+  .rankings-stat-card .rsc-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .rankings-stat-card .rsc-sub {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-top: 8px;
+  }
+  .rankings-stat-card .rsc-value-sm {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 6px 0 8px;
+  }
+  .rank-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .rank-row:last-child { border-bottom: none; }
+  .rank-medal {
+    font-size: 16px;
+    width: 24px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .rank-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rank-bar-track {
+    width: 80px;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .rank-bar-fill {
+    height: 100%;
+    background: var(--accent-btn);
+    border-radius: 3px;
+    transition: width 0.5s ease;
+  }
+  .rank-count {
+    font-size: 12px;
+    color: var(--text-secondary);
+    width: 52px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .rankings-browse-btn {
+    display: block;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 14px;
+    border-radius: 14px;
+    border: none;
+    background: var(--accent-btn);
+    color: var(--on-accent);
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    width: 100%;
+  }
+  .rankings-empty {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-tertiary);
+    font-size: 14px;
+  }
+  </style>
+{{THEME_HEAD}}
+</head>
+<body data-couple="{{COUPLE}}" data-passphrase="{{PASSPHRASE}}">
+
+<!-- Upload page -->
+<div class="page active" id="uploadPage">
+  <div class="upload-wrap">
+    <div class="card">
+      <div class="theme-scene theme-scene-hero" aria-hidden="true"></div>
+      <div class="header">
+        <h1>{{COUPLE_HEADING}}</h1>
+        <p>Share your photos with us</p>
+      </div>
+
+      <div class="progress">
+        <div class="progress-dot" id="pd0"></div>
+        <div class="progress-dot" id="pd1"></div>
+        <div class="progress-dot" id="pd2"></div>
+      </div>
+
+      <div class="step active" id="step0">
+        <p id="rankDisplay" style="display:none; text-align:center; font-size:14px; color:var(--text-secondary); margin-bottom:12px;"></p>
+        <div class="upload-zone" onclick="beginUpload()">
+          <div class="upload-cta">
+          <div class="upload-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="16 16 12 12 8 16"></polyline>
+              <line x1="12" y1="12" x2="12" y2="21"></line>
+              <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path>
+            </svg>
+          </div>
+          <h2>Add your photos</h2>
+          <p>Tap to get started</p>
+          </div>
+          <p class="upload-note">Photos only — for videos, find us and we'll transfer in person</p>
+          <p class="upload-note upload-note-warn">Best on WiFi — photos can use a lot of data</p>
+        </div>
+        <a class="view-gallery-link" onclick="showGallery()">See everyone's photos →</a>
+        <a class="share-link" onclick="shareApp()">Invite someone to share photos →</a>
+        <p class="privacy-link" id="privacyLink" onclick="togglePrivacy()">Your privacy ↓</p>
+        <div class="privacy-content" id="privacyContent" style="display:none;">
+          <p>This is a private site for sharing photos from {{COUPLE}}'s wedding. It's password protected and only shared with their guests.</p>
+          <p>The photos you upload and the name you enter can be seen by the couple and other guests. They're never made public, sold, or used for anything else.</p>
+          <p>After the wedding, once the couple have saved everything, the photos are deleted from the site.</p>
+          <p>If you have a question or want a photo removed, just ask the couple.</p>
+        </div>
+      </div>
+
+      <div class="step" id="step1">
+        <label class="field-label">What's your name?</label>
+        <p style="font-size:14px; color:var(--text-tertiary); margin-top:-2px; margin-bottom:10px; font-style:italic;">We'll remember this for next time</p>
+        <input type="text" id="nameInput" placeholder="e.g. Aunt Beru" oninput="checkNameInput()" />
+        <button class="btn-primary" id="nameNextBtn" onclick="nextStep()" disabled>Next</button>
+        <a class="btn-back" onclick="goToStep(0)">Back</a>
+        <p style="font-size:12px; color:var(--text-tertiary); margin-top:12px; font-style:italic; text-wrap:balance;">Using more than one device? Enter the exact same name on each and your photos will count together</p>
+      </div>
+
+      <div class="step" id="step2">
+        <input type="file" id="fileInput" accept="image/*" multiple style="display:none" />
+        <label class="field-label" style="margin-bottom:12px;">Where were these taken?</label>
+        <!-- Filled from the admin's location list by renderLocationButtons. -->
+        <div class="loc-grid" id="locGrid"></div>
+        <div class="thumbs" id="thumbsContainer"></div>
+        <div class="file-warning" id="fileWarning"></div>
+        <button class="btn-primary" id="locNextBtn" onclick="locNextAction()" disabled>Choose photos</button>
+        <a class="btn-back" id="step2Back" onclick="step2BackAction()">Back</a>
+      </div>
+
+      <div class="step" id="step4">
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
+        <p style="text-align:center; font-size:14px; color:var(--text-secondary);" id="uploadStatus">Uploading your photos...</p>
+        <div class="upload-error" id="uploadError"></div>
+        <button class="retry-btn" id="retryBtn" onclick="retryUpload()">Try again</button>
+      </div>
+
+      <div class="step" id="step5">
+        <div class="success">
+          <div class="success-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <h2 id="successTitle">Photos uploaded!</h2>
+          <p id="rankMessage" style="font-size:15px; margin-bottom:12px;"></p>
+          <p id="successMsg">Thank you — we can't wait to see these!</p>
+          <button class="btn-primary" onclick="showGallery()">See everyone's photos →</button>
+          <button class="btn-secondary" onclick="resetForm()">Add more photos</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Rankings overlay -->
+<div class="rankings-overlay" id="rankingsOverlay">
+  <div class="rankings-overlay-header">
+    <div>
+      <h2>The Memory Makers 📸</h2>
+      <p>Who's been capturing the magic?</p>
+    </div>
+    <button class="rankings-close" onclick="closeRankings()">Close</button>
+  </div>
+  <div class="rankings-stats" id="rankingsStats"></div>
+  <div class="rankings-section">
+    <h3>Leaderboard</h3>
+    <div id="rankingsList"></div>
+  </div>
+  <button class="rankings-browse-btn" onclick="closeRankings()">Back to photos</button>
+</div>
+
+<!-- Gallery page -->
+<div class="page" id="galleryPage">
+  <div class="gallery-page">
+    <div class="theme-scene theme-scene-slim" aria-hidden="true"></div>
+    <div class="gallery-header">
+      <div>
+        <h1>Everyone's photos</h1>
+        <p id="photoCount">Loading...</p>
+        <a class="leaderboard-link" onclick="openRankings()">See the leaderboard →</a>
+      </div>
+      <button class="add-photos-btn" onclick="showUpload()">+ Add photos</button>
+    </div>
+
+    <div class="gallery-toolbar">
+      <button class="refresh-btn" onclick="refreshGallery()">↻ Refresh</button>
+      <button class="sort-toggle" id="sortToggle" onclick="toggleSort()">Newest first</button>
+    </div>
+
+    <!-- All and Featured are fixed; renderLocationPills appends the rest. -->
+    <div class="filter-row" id="filterRow">
+      <span class="filter-pill active" onclick="filterGallery('all', this)">All photos</span>
+      <span class="filter-pill" onclick="filterGallery('featured', this)">✨ Featured</span>
+    </div>
+
+    <div class="photo-grid" id="photoGrid">
+      <div class="loading-state">Loading photos...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox">
+  <button class="lightbox-close" onclick="closeLightbox()">×</button>
+  <button class="lightbox-nav left" id="lightboxPrev" onclick="navigatePhoto(-1)">‹</button>
+  <div class="lightbox-inner" id="lightboxInner">
+    <img id="lightboxImg" src="" alt="" />
+    <img id="lightboxPreload" src="" alt="" />
+    <div class="lightbox-spinner" id="lightboxSpinner"><div class="lightbox-spinner-ring"></div></div>
+  </div>
+  <button class="lightbox-nav right" id="lightboxNext" onclick="navigatePhoto(1)">›</button>
+  <div class="lightbox-info">
+    <div class="couple-pick" id="couplePick" hidden>💍 Couple’s pick</div>
+    <p id="lightboxName"></p>
+    <span id="lightboxLocation"></span>
+    <div class="like-row">
+      <!-- The count lives inside the pill: beside it, the centred row slid
+           sideways whenever a like appeared or disappeared. -->
+      <button class="like-btn" id="likeBtn" onclick="toggleLike()" aria-pressed="false">
+        <span class="like-count" id="likeCount" hidden></span><span class="like-icon" id="likeIcon" aria-hidden="true">♡</span><span id="likeLabel">Like</span>
+      </button>
+      <!-- In place of the button on a guest's own photo: there is nothing to tap. -->
+      <span class="own-photo-note" id="ownPhotoNote" hidden>Your photo</span>
+    </div>
+  </div>
+  <div class="lightbox-actions">
+    <p class="lightbox-status hidden" id="lightboxStatus"></p>
+    <p class="lightbox-save-tip hidden" id="saveTip">Press and hold photo to save to your camera roll</p>
+  </div>
+</div>
+
+<!-- Asked once, the first time a guest without a name likes a photo. Outside
+     the lightbox so its swipe handlers never see these taps. -->
+<div class="like-name-overlay" id="likeNameOverlay">
+  <div class="like-name-card">
+    <h3>What’s your name?</h3>
+    <p>Add your name to like photos. We’ll use it for your uploads too.</p>
+    <input type="text" id="likeNameInput" placeholder="e.g. Aunt Beru" maxlength="100" oninput="checkLikeNameInput()" />
+    <button class="btn-primary" id="likeNameBtn" onclick="confirmLikeName()" disabled>Like photo</button>
+    <a class="btn-back" onclick="closeLikeNamePrompt()">Cancel</a>
+  </div>
+</div>
+
+<!-- The admin's location list, filled in by the Worker (see renderPage). -->
+<script type="application/json" id="locationsData">{{LOCATIONS_JSON}}</script>
+<script>
+  // Same-origin: the pages and the API are always served by the one Worker, so
+  // a relative base keeps working whatever domain the app is deployed on.
+  const WORKER_URL = '';
+  const LOCATIONS = JSON.parse(document.getElementById('locationsData').textContent);
+  let selectedFiles = [];
+  let selectedLocation = '';
+  let allPhotos = [];
+  let galleryStale = false;
+  // Fingerprint of the gallery as last loaded, compared against /photo-count to
+  // decide whether a refetch is worth it. Null until the first load.
+  let galleryVersion = null;
+  let lastSyncCheck = 0;
+  // Foreground events can fire two or three times for one app resume; this keeps
+  // that to a single request without making the check feel stale.
+  const SYNC_MIN_INTERVAL_MS = 10000;
+  let currentFilter = 'all';
+  let currentPhotoIndex = 0;
+  let visiblePhotos = [];
+  let renderedCount = 0;
+  let scrollObserver = null;
+  const PAGE_SIZE = 30;
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let navigating = false;
+  let swipeDir = null;
+  // Set when a gesture starts on a control rather than the photo. The swipe
+  // handler calls preventDefault() once a finger moves 6px, and preventDefault
+  // on touchmove suppresses the click that follows — so without this, a normal
+  // tap on the close or arrow buttons drifts past 6px and never fires onclick.
+  let swipeIgnore = false;
+  const imgCache = new Map();
+  let fullSizeTimer = null;
+  let countdownTimer = null;
+  // Highest resolution stage currently in the lightbox: 1 grid, 2 display,
+  // 3 original. Reset whenever the displayed photo changes.
+  let lightboxStage = 0;
+  // The photo whose original is already on its way, so zooming in doesn't
+  // start a second download of it. Cleared whenever the displayed photo changes.
+  let originalRequestedFor = null;
+  // Photos already fetched at full quality this session. Originals are served
+  // immutable with a one-year max-age, so reopening one costs no network — it's
+  // only the UI that would otherwise replay the ladder and flash the pill again.
+  const fullyLoadedPhotos = new Set();
+  // How long a guest has to linger before the original is fetched for them.
+  // Swiping stays fast; a short pause fills in full quality.
+  const FULL_QUALITY_DWELL_MS = 2000;
+  // The countdown only appears for the last second of the wait. Starting it at
+  // zero would flash a line of text under every photo a guest swipes past.
+  const COUNTDOWN_AT_MS = 1000;
+  const LABEL_COUNTDOWN = 'Full quality in 1…';
+  const LABEL_LOADING = 'Loading full quality…';
+  // Data-saver mode skips the automatic fetch, so there it becomes an offer.
+  const LABEL_TAPPABLE = 'Tap for full quality';
+  let failedFiles = [];
+  let sortOrder = 'newest';
+  let storedGuestName = null;
+  let skippedNameStep = false;
+  storedGuestName = localStorage.getItem('uploader_name') || null;
+  // Likes needed to reach Featured without the couple's star; the server sends
+  // the admin's setting with every photo list.
+  let featuredMinLikes = 3;
+  // Photos with a like request on its way, so a double tap can't send two.
+  const likesInFlight = new Set();
+  let pendingLikePhoto = null;
+  const OWN_PHOTO_MESSAGE = 'Nice try 😄 — no voting for your own photos!';
+  refreshRankDisplay();
+
+  // Display sizes, generated server-side and stored in R2. The /v/ route falls
+  // back to the original by itself when a source can't be transformed, so these
+  // are safe to use unconditionally.
+  function gridUrl(p) {
+    return WORKER_URL + '/v/grid/' + p.file_key;
+  }
+
+  function displayUrl(p) {
+    return WORKER_URL + '/v/display/' + p.file_key;
+  }
+
+  // The genuine original. This is what has to be in the <img> before we invite
+  // anyone to press and hold, or they'd save a downscaled copy.
+  function originalUrl(p) {
+    return WORKER_URL + '/image/' + p.file_key;
+  }
+
+  // Every entry into the lightbox paints the grid tile first, even for photos
+  // already held at full quality. The original is in the browser cache by then,
+  // but decoding a 12MP JPEG costs far more than the 180ms slide budget — enough
+  // to trip the spinner and stall the transition. The tile decodes instantly and
+  // the original swaps in behind it.
+
+  function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function beginUpload() {
+    if (storedGuestName) {
+      skippedNameStep = true;
+      showWelcomeBack(storedGuestName);
+      goToStep(2);
+    } else {
+      skippedNameStep = false;
+      goToStep(1);
+    }
+  }
+
+  function locNextAction() {
+    if (selectedFiles.length > 0) {
+      startUpload();
+    } else {
+      document.getElementById('fileInput').click();
+    }
+  }
+
+  document.getElementById('fileInput').addEventListener('change', function(e) {
+    selectedFiles = Array.from(e.target.files);
+    if (selectedFiles.length > 0) {
+      showThumbs();
+      const btn = document.getElementById('locNextBtn');
+      btn.textContent = 'Upload photos';
+      btn.disabled = false;
+      updateStep2Back();
+    }
+  });
+
+  function showThumbs() {
+    const container = document.getElementById('thumbsContainer');
+    container.innerHTML = '';
+    const showCount = selectedFiles.length > 4;
+    const visibleCount = showCount ? 3 : Math.min(selectedFiles.length, 4);
+    selectedFiles.slice(0, visibleCount).forEach(file => {
+      const img = document.createElement('img');
+      img.className = 'thumb';
+      img.src = URL.createObjectURL(file);
+      container.appendChild(img);
+    });
+    if (showCount) {
+      const count = selectedFiles.length - 3;
+      const more = document.createElement('div');
+      more.className = 'thumb-more';
+
+      const peek = document.createElement('img');
+      peek.className = 'thumb-peek';
+      peek.src = URL.createObjectURL(selectedFiles[3]);
+      more.appendChild(peek);
+
+      const overlay = document.createElement('div');
+      overlay.className = 'thumb-more-overlay';
+      overlay.textContent = '+' + count;
+      more.appendChild(overlay);
+
+      container.appendChild(more);
+    }
+
+    const warning = document.getElementById('fileWarning');
+    const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif']);
+    const MAX_PHOTOS = 20;
+    const MAX_FILE_BYTES = 95 * 1024 * 1024;
+    const MAX_SESSION_BYTES = 300 * 1024 * 1024;
+    const issues = [];
+
+    const invalidFiles = selectedFiles.filter(f => !ALLOWED_TYPES.has(f.type));
+    if (invalidFiles.length > 0) {
+      selectedFiles = selectedFiles.filter(f => ALLOWED_TYPES.has(f.type));
+      issues.push(invalidFiles.length + ' unsupported file' + (invalidFiles.length > 1 ? 's' : '') + ' removed');
+    }
+
+    const tooBig = selectedFiles.filter(f => f.size > MAX_FILE_BYTES);
+    if (tooBig.length > 0) {
+      selectedFiles = selectedFiles.filter(f => f.size <= MAX_FILE_BYTES);
+      issues.push(tooBig.length + ' file' + (tooBig.length > 1 ? 's' : '') + ' over 95MB removed');
+    }
+
+    let photoLimitRemoved = 0;
+    if (selectedFiles.length > MAX_PHOTOS) {
+      photoLimitRemoved = selectedFiles.length - MAX_PHOTOS;
+      selectedFiles = selectedFiles.slice(0, MAX_PHOTOS);
+    }
+
+    if (issues.length > 0 || photoLimitRemoved > 0) {
+      let msg = '';
+      if (photoLimitRemoved > 0) {
+        msg = 'Uploading your first 20 photos (' + photoLimitRemoved + ' won\'t be included) — come back and upload again to share the rest!';
+        if (issues.length > 0) msg += ' (' + issues.join(', ') + ')';
+      } else {
+        msg = issues.join(' · ') + '.';
+      }
+      warning.textContent = msg;
+      warning.classList.add('visible');
+    } else {
+      const totalSize = selectedFiles.reduce((sum, f) => sum + f.size, 0);
+      if (totalSize > MAX_SESSION_BYTES) {
+        warning.textContent = 'Total is ' + Math.round(totalSize / 1024 / 1024) + 'MB — use WiFi if possible.';
+        warning.classList.add('visible');
+      } else if (selectedFiles.some(f => f.size > 80 * 1024 * 1024)) {
+        warning.textContent = 'Some files are over 80MB — use WiFi if possible.';
+        warning.classList.add('visible');
+      } else {
+        warning.classList.remove('visible');
+      }
+    }
+  }
+
+  function updateStep2Back() {
+    const btn = document.getElementById('step2Back');
+    btn.textContent = selectedFiles.length > 0 ? 'Start over' : 'Back';
+  }
+
+  function step2BackAction() {
+    if (selectedFiles.length > 0) {
+      selectedFiles = [];
+      document.getElementById('fileInput').value = '';
+      document.getElementById('thumbsContainer').innerHTML = '';
+      document.getElementById('fileWarning').classList.remove('visible');
+      const locBtn = document.getElementById('locNextBtn');
+      locBtn.textContent = 'Choose photos';
+      locBtn.disabled = !selectedLocation;
+      updateStep2Back();
+    } else {
+      goToStep(skippedNameStep ? 0 : 1);
+    }
+  }
+
+  function checkNameInput() {
+    const val = document.getElementById('nameInput').value.trim();
+    document.getElementById('nameNextBtn').disabled = val.length === 0;
+  }
+
+  // Built with textContent rather than markup: labels are admin-entered text.
+  function renderLocationButtons() {
+    const grid = document.getElementById('locGrid');
+    LOCATIONS.forEach(function(loc) {
+      const btn = document.createElement('div');
+      btn.className = 'loc-btn';
+      const emoji = document.createElement('span');
+      emoji.textContent = loc.emoji;
+      btn.append(emoji, loc.label);
+      btn.addEventListener('click', function() { selectLoc(btn, loc.label); });
+      grid.appendChild(btn);
+    });
+  }
+
+  function renderLocationPills() {
+    const row = document.getElementById('filterRow');
+    LOCATIONS.forEach(function(loc) {
+      const pill = document.createElement('span');
+      pill.className = 'filter-pill';
+      pill.textContent = loc.emoji ? loc.emoji + ' ' + loc.label : loc.label;
+      pill.title = loc.label;
+      pill.addEventListener('click', function() { filterGallery(loc.label, pill); });
+      row.appendChild(pill);
+    });
+  }
+
+  renderLocationButtons();
+  renderLocationPills();
+
+  function selectLoc(el, loc) {
+    document.querySelectorAll('.loc-btn').forEach(b => b.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedLocation = loc;
+    const btn = document.getElementById('locNextBtn');
+    btn.disabled = false;
+    btn.textContent = selectedFiles.length > 0 ? 'Upload photos' : 'Choose photos';
+  }
+
+  function nextStep() {
+    const steps = document.querySelectorAll('.step');
+    const current = document.querySelector('.step.active');
+    const idx = Array.from(steps).indexOf(current);
+    goToStep(idx + 1);
+  }
+
+  function goToStep(n) {
+    document.querySelectorAll('.step').forEach((s, i) => {
+      s.classList.toggle('active', i === n);
+    });
+    for (let i = 0; i < 3; i++) {
+      document.getElementById('pd' + i).classList.toggle('done', i < n);
+    }
+  }
+
+  function showWelcomeBack(name) {
+    const existing = document.getElementById('welcomeBack');
+    if (existing) return;
+    const el = document.createElement('p');
+    el.id = 'welcomeBack';
+    el.textContent = `Welcome back, ${name} 👋`;
+    el.style.cssText = 'font-size:14px; color:var(--text-secondary); text-align:center; margin-bottom:6px;';
+    const notYou = document.createElement('p');
+    notYou.id = 'notYouLink';
+    notYou.textContent = 'Not you? Tap here';
+    notYou.style.cssText = 'font-size:12px; color:var(--text-tertiary); text-align:center; margin-bottom:16px; cursor:pointer; text-decoration:underline; text-underline-offset:3px;';
+    notYou.onclick = clearStoredName;
+    const grid = document.querySelector('.loc-grid');
+    grid.parentNode.insertBefore(el, grid);
+    grid.parentNode.insertBefore(notYou, grid);
+  }
+
+  function clearStoredName() {
+    localStorage.removeItem('uploader_name');
+    storedGuestName = null;
+    skippedNameStep = false;
+    const welcomeBack = document.getElementById('welcomeBack');
+    if (welcomeBack) welcomeBack.remove();
+    const notYou = document.getElementById('notYouLink');
+    if (notYou) notYou.remove();
+    goToStep(1);
+  }
+
+  async function startUpload() {
+    const name = storedGuestName || document.getElementById('nameInput').value.trim() || 'Anonymous';
+    if (!storedGuestName) {
+      localStorage.setItem('uploader_name', name);
+      storedGuestName = name;
+    }
+    goToStep(3);
+    document.getElementById('uploadError').classList.remove('visible');
+    document.getElementById('retryBtn').classList.remove('visible');
+    failedFiles = [];
+    await uploadFiles(selectedFiles, name, selectedLocation);
+  }
+
+  async function retryUpload() {
+    const name = storedGuestName || document.getElementById('nameInput').value.trim() || 'Anonymous';
+    document.getElementById('uploadError').classList.remove('visible');
+    document.getElementById('retryBtn').classList.remove('visible');
+    const toRetry = [...failedFiles];
+    failedFiles = [];
+    await uploadFiles(toRetry, name, selectedLocation);
+  }
+
+  async function uploadFiles(files, name, location) {
+    let uploaded = 0;
+    const total = files.length;
+    const CONCURRENCY = 3;
+    let index = 0;
+    let rateLimited = false;
+
+    async function runWorker() {
+      while (index < total && !rateLimited) {
+        const file = files[index++];
+        try {
+          const success = await uploadSingleFile(file, name, location);
+          if (success) {
+            uploaded++;
+          } else {
+            failedFiles.push(file);
+          }
+        } catch (err) {
+          if (err.message === 'RATE_LIMITED') {
+            if (!rateLimited) {
+              rateLimited = true;
+              while (index < total) failedFiles.push(files[index++]);
+            }
+            failedFiles.push(file);
+            return;
+          }
+          failedFiles.push(file);
+        }
+
+        if (!rateLimited) {
+          const done = uploaded + failedFiles.length;
+          const pct = Math.round((done / total) * 100);
+          document.getElementById('progressFill').style.width = pct + '%';
+          document.getElementById('uploadStatus').textContent =
+            'Uploading ' + done + ' of ' + total + '...';
+        }
+      }
+    }
+
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, total) }, runWorker)
+    );
+
+    if (rateLimited) {
+      const partialMsg = uploaded > 0
+        ? uploaded + ' photo' + (uploaded !== 1 ? 's' : '') + ' uploaded. ' +
+          failedFiles.length + ' failed — tap "Try again" to retry those.'
+        : null;
+
+      document.getElementById('uploadError').textContent =
+        'Upload limit reached — try again in 60 seconds';
+      document.getElementById('uploadError').classList.add('visible');
+
+      const retryBtn = document.getElementById('retryBtn');
+      retryBtn.disabled = true;
+      retryBtn.textContent = 'Try again in 60s';
+      retryBtn.classList.add('visible');
+
+      let secs = 59;
+      const iv = setInterval(function() {
+        secs--;
+        if (secs <= 0) {
+          clearInterval(iv);
+          retryBtn.disabled = false;
+          retryBtn.textContent = 'Try again';
+          document.getElementById('uploadError').textContent = partialMsg ||
+            'Could not upload your photos. Please check your connection and try again.';
+        } else {
+          retryBtn.textContent = 'Try again in ' + secs + 's';
+        }
+      }, 1000);
+
+      return;
+    }
+
+    if (failedFiles.length > 0 && uploaded === 0) {
+      document.getElementById('uploadError').textContent =
+        'Could not upload your photos. Please check your connection and try again.';
+      document.getElementById('uploadError').classList.add('visible');
+      document.getElementById('retryBtn').classList.add('visible');
+    } else if (failedFiles.length > 0) {
+      document.getElementById('uploadError').textContent =
+        uploaded + ' photo' + (uploaded !== 1 ? 's' : '') + ' uploaded. ' +
+        failedFiles.length + ' failed — tap "Try again" to retry those.';
+      document.getElementById('uploadError').classList.add('visible');
+      document.getElementById('retryBtn').classList.add('visible');
+    } else {
+      const nameDisplay = name !== 'Anonymous' ? name : '';
+      document.getElementById('successTitle').textContent =
+        uploaded + (uploaded === 1 ? ' photo' : ' photos') + ' uploaded!';
+      document.getElementById('successMsg').textContent =
+        (nameDisplay ? 'Thanks ' + nameDisplay + ' — we' : 'We') +
+        " can't wait to see these!";
+      galleryStale = true;
+      await showSuccessRank(uploaded);
+      refreshRankDisplay();
+      goToStep(4);
+    }
+  }
+
+  async function uploadSingleFile(file, name, location) {
+    const MAX_RETRIES = 3;
+    // Done once, not per attempt — a retry shouldn't re-decode the photo.
+    const upload = await prepareForUpload(file);
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const formData = new FormData();
+        formData.append('file', upload, upload.name);
+        formData.append('uploader_name', name);
+        formData.append('location', location);
+        formData.append('guest_id', ensureGuestId());
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+
+        const res = await fetch(WORKER_URL + '/upload', {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal
+        });
+
+        clearTimeout(timeout);
+        if (res.status === 429) {
+          throw new Error('RATE_LIMITED');
+        }
+        if (res.ok) return true;
+
+      } catch (err) {
+        if (err.message === 'RATE_LIMITED') throw err;
+        if (attempt === MAX_RETRIES) return false;
+        await new Promise(r => setTimeout(r, 1000 * attempt));
+      }
+    }
+    return false;
+  }
+
+  // Display sizes are generated server-side by Cloudflare Images, so the phone
+  // uploads the original untouched — with one exception. Cloudflare cannot
+  // decode HEIC outside the Enterprise plan, and a stored HEIC is unviewable on
+  // Android and Windows anyway. HEIC only comes from Apple devices, where canvas
+  // *can* decode it, so convert those to JPEG here and upload that as the original.
+  function prepareForUpload(file) {
+    const isHeic = /^image\/hei[cf]$/i.test(file.type) || /\.hei[cf]$/i.test(file.name);
+    if (!isHeic) return Promise.resolve(file);
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      const jpegName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+
+      // Can't decode it here either — send the original and let the server
+      // fall back rather than losing the photo.
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(file);
+      };
+
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        canvas.toBlob(blob => {
+          resolve(blob && blob.size > 0
+            ? new File([blob], jpegName, { type: 'image/jpeg' })
+            : file);
+        }, 'image/jpeg', 0.92);
+      };
+
+      img.src = url;
+    });
+  }
+
+  function resetForm() {
+    selectedFiles = [];
+    selectedLocation = '';
+    skippedNameStep = false;
+    document.getElementById('fileInput').value = '';
+    document.getElementById('nameInput').value = '';
+    document.querySelectorAll('.loc-btn').forEach(b => b.classList.remove('selected'));
+    const locNextBtn = document.getElementById('locNextBtn');
+    locNextBtn.disabled = true;
+    locNextBtn.textContent = 'Choose photos';
+    document.getElementById('thumbsContainer').innerHTML = '';
+    document.getElementById('fileWarning').classList.remove('visible');
+    document.getElementById('progressFill').style.width = '0%';
+    document.getElementById('nameNextBtn').disabled = true;
+    document.getElementById('privacyContent').style.display = 'none';
+    document.getElementById('privacyLink').textContent = 'Your privacy ↓';
+    goToStep(0);
+  }
+
+  function togglePrivacy() {
+    const content = document.getElementById('privacyContent');
+    const link = document.getElementById('privacyLink');
+    if (content.style.display === 'none') {
+      content.style.display = 'block';
+      link.textContent = 'Your privacy ↑';
+    } else {
+      content.style.display = 'none';
+      link.textContent = 'Your privacy ↓';
+    }
+  }
+
+  async function showGallery() {
+    history.pushState({ page: 'gallery' }, '');
+    document.getElementById('uploadPage').classList.remove('active');
+    document.getElementById('galleryPage').classList.add('active');
+    window.scrollTo(0, 0);
+    if (allPhotos.length === 0 || galleryStale) {
+      galleryStale = false;
+      await loadPhotos();
+    } else {
+      await syncGallery({ immediate: true, keepPosition: false });
+    }
+  }
+
+  /**
+   * Refetches the gallery only if something actually changed server-side.
+   *
+   * Called when the app comes back to the foreground — a guest who locks their
+   * phone mid-gallery and reopens it an hour later should not be looking at an
+   * hour-old view. The fingerprint covers new uploads, deletions and photos
+   * being starred into Featured.
+   */
+  async function syncGallery(opts) {
+    const o = opts || {};
+    if (!document.getElementById('galleryPage').classList.contains('active')) return;
+    // Never rearrange the grid underneath an open lightbox; closing it syncs.
+    if (document.getElementById('lightbox').classList.contains('open')) return;
+    if (!o.immediate && Date.now() - lastSyncCheck < SYNC_MIN_INTERVAL_MS) return;
+    lastSyncCheck = Date.now();
+
+    try {
+      const res = await fetch(WORKER_URL + '/photo-count');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (galleryVersion !== null && data.version === galleryVersion) return;
+      if (o.keepPosition === false) {
+        await loadPhotos();
+      } else {
+        await reloadPreservingPosition();
+      }
+    } catch (e) {
+      // Offline or a failed check — whatever is on screen stays on screen.
+    }
+  }
+
+  function showUpload() {
+    document.getElementById('galleryPage').classList.remove('active');
+    document.getElementById('uploadPage').classList.add('active');
+    resetForm();
+    refreshRankDisplay();
+    window.scrollTo(0, 0);
+  }
+
+  async function openRankings() {
+    const overlay = document.getElementById('rankingsOverlay');
+    overlay.classList.add('open');
+    window.scrollTo(0, 0);
+    document.getElementById('rankingsList').innerHTML = '<div class="rankings-empty">Loading...</div>';
+    document.getElementById('rankingsStats').innerHTML = '';
+    try {
+      const res = await fetch(WORKER_URL + '/rankings');
+      if (!res.ok) throw new Error('Failed to load');
+      const data = await res.json();
+      renderRankings(data);
+    } catch (e) {
+      document.getElementById('rankingsList').innerHTML = '<div class="rankings-empty">Couldn\'t load rankings — try again in a moment.</div>';
+    }
+  }
+
+  function closeRankings() {
+    document.getElementById('rankingsOverlay').classList.remove('open');
+  }
+
+  // uploaded_at is SQLite's CURRENT_TIMESTAMP: UTC with no zone marker.
+  // Within five hours an elapsed time reads better than a clock time; past
+  // that, uploads only span a few days, so a relative day beats a date.
+  function formatLastUpload(uploadedAt, now) {
+    const d = new Date(String(uploadedAt).replace(' ', 'T') + 'Z');
+    if (isNaN(d)) return '—';
+    const mins = Math.floor((now - d) / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return mins + ' min ago';
+    if (mins <= 300) {
+      const h = Math.floor(mins / 60), m = mins % 60;
+      return h + ' hr' + (m ? ' ' + m + ' min' : '') + ' ago';
+    }
+    const dayStart = function(x) { return new Date(x.getFullYear(), x.getMonth(), x.getDate()); };
+    const days = Math.round((dayStart(now) - dayStart(d)) / 86400000);
+    const day = days <= 0 ? 'Today' : days + ' day' + (days !== 1 ? 's' : '') + ' ago';
+    return day + ', ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function renderRankings(data) {
+    const uploaders = data.uploaders || [];
+    const totalPhotos = data.total_photos || 0;
+    const medals = ['🥇', '🥈', '🥉'];
+
+    const last = data.last_upload;
+    document.getElementById('rankingsStats').innerHTML =
+      '<div class="rankings-stat-card"><div class="rsc-value">' + totalPhotos + '</div><div class="rsc-label">photos shared</div>' +
+        '<div class="rsc-sub">from ' + uploaders.length + ' memory maker' + (uploaders.length !== 1 ? 's' : '') + '</div></div>' +
+      '<div class="rankings-stat-card"><div class="rsc-label">latest photo</div>' +
+        (last
+          ? '<div class="rsc-value-sm">' + formatLastUpload(last.uploaded_at, new Date()) + '</div><div class="rsc-sub">by ' + escapeHtml(last.uploader_name || 'Anonymous') + '</div>'
+          : '<div class="rsc-value-sm">—</div>') +
+      '</div>';
+
+    if (uploaders.length === 0) {
+      document.getElementById('rankingsList').innerHTML = '<div class="rankings-empty">No photos yet — be the first!</div>';
+      return;
+    }
+
+    const max = uploaders[0].total;
+    document.getElementById('rankingsList').innerHTML = uploaders.map(function(u, i) {
+      const pct = max > 0 ? Math.round((u.total / max) * 100) : 0;
+      const medal = medals[i] || (i + 1) + '.';
+      return '<div class="rank-row">' +
+        '<span class="rank-medal">' + medal + '</span>' +
+        '<span class="rank-name">' + escapeHtml(u.uploader_name || 'Anonymous') + '</span>' +
+        '<div class="rank-bar-track"><div class="rank-bar-fill" style="width:0%" data-pct="' + pct + '"></div></div>' +
+        '<span class="rank-count">' + u.total + ' photo' + (u.total !== 1 ? 's' : '') + '</span>' +
+      '</div>';
+    }).join('');
+
+    requestAnimationFrame(function() {
+      document.querySelectorAll('.rank-bar-fill').forEach(function(el) {
+        el.style.width = el.dataset.pct + '%';
+      });
+    });
+  }
+
+  async function loadPhotos() {
+    try {
+      const res = await fetch(WORKER_URL + '/photos', { headers: guestHeaders() });
+      const data = await res.json();
+      allPhotos = data.photos;
+      if (data.version) galleryVersion = data.version;
+      if (data.featured_min_likes) featuredMinLikes = data.featured_min_likes;
+      renderGallery();
+    } catch (err) {
+      document.getElementById('photoGrid').innerHTML =
+        '<div class="loading-state">Could not load photos.</div>';
+    }
+  }
+
+  // renderGallery() wipes the grid and re-renders only the first page, so a
+  // refresh would otherwise dump a guest who had scrolled back at the top with
+  // their place lost. Anchor on the first photo still on screen and put it back
+  // where it was — new photos arriving above it then don't shift the view.
+  function captureAnchor() {
+    const items = document.querySelectorAll('.photo-item');
+    for (const el of items) {
+      const r = el.getBoundingClientRect();
+      if (r.bottom > 0) return { key: el.dataset.key, top: r.top };
+    }
+    return null;
+  }
+
+  function restoreAnchor(anchor) {
+    if (!anchor || !anchor.key) return;
+    const el = document.querySelector('.photo-item[data-key="' + CSS.escape(anchor.key) + '"]');
+    if (!el) return;
+    const delta = el.getBoundingClientRect().top - anchor.top;
+    if (delta) window.scrollBy(0, delta);
+  }
+
+  async function reloadPreservingPosition() {
+    const anchor = captureAnchor();
+    const wanted = renderedCount;
+    await loadPhotos();
+    // Re-expand to at least as many photos as were rendered before, or the
+    // anchor won't be in the DOM to scroll back to.
+    while (renderedCount < wanted && renderedCount < visiblePhotos.length) {
+      appendPhotos();
+    }
+    restoreAnchor(anchor);
+  }
+
+  function filterGallery(filter, el) {
+    currentFilter = filter;
+    document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+    renderGallery();
+
+    // Tapping a filter is a deliberate "show me this", which makes it a natural
+    // moment to check for photos that arrived since the page loaded — at a
+    // wedding they arrive continuously, and a guest can sit on this page for a
+    // long time. Rendered first so the filter is instant; syncGallery costs one
+    // fingerprint check, keeps its own throttle so a flurry of taps cannot spam
+    // it, and no-ops entirely when nothing has changed.
+    syncGallery({ keepPosition: false });
+  }
+
+  function toggleSort() {
+    sortOrder = sortOrder === 'newest' ? 'oldest' : 'newest';
+    document.getElementById('sortToggle').textContent =
+      sortOrder === 'newest' ? 'Newest first' : 'Oldest first';
+    renderGallery();
+
+    // Same reasoning as filterGallery: a deliberate reorder is a moment the
+    // guest is asking to see the collection afresh. Flipping to "Newest first"
+    // is the tap most likely to be looking for something that just arrived.
+    syncGallery({ keepPosition: false });
+  }
+
+  async function refreshGallery() {
+    const btn = document.querySelector('.refresh-btn');
+    btn.textContent = '↻ Refreshing...';
+    await loadPhotos();
+    btn.textContent = '↻ Refresh';
+  }
+
+  function renderGallery() {
+    const featured = currentFilter === 'featured';
+    const filtered = currentFilter === 'all'
+      ? allPhotos
+      : featured
+        ? sortFeatured(allPhotos.filter(p => isFeatured(p, featuredMinLikes)))
+        : allPhotos.filter(p => p.location === currentFilter);
+
+    visiblePhotos = filtered.filter(p =>
+      p.file_key.match(/\.(jpg|jpeg|png|gif|webp|heic)$/i)
+    );
+
+    // Featured has its own order — the couple's picks, then the most liked —
+    // so newest/oldest doesn't apply there.
+    document.getElementById('sortToggle').style.display = featured ? 'none' : '';
+    if (sortOrder === 'oldest' && !featured) {
+      visiblePhotos = [...visiblePhotos].reverse();
+    }
+
+    const total = allPhotos.filter(p =>
+      p.file_key.match(/\.(jpg|jpeg|png|gif|webp|heic)$/i)
+    ).length;
+
+    const guests = new Set(allPhotos.map(p => p.uploader_name).filter(Boolean)).size;
+    document.getElementById('photoCount').textContent =
+      total + ' photo' + (total !== 1 ? 's' : '') + ' from ' + guests + ' guest' + (guests !== 1 ? 's' : '');
+
+    const grid = document.getElementById('photoGrid');
+
+    if (scrollObserver) { scrollObserver.disconnect(); scrollObserver = null; }
+
+    if (visiblePhotos.length === 0) {
+      grid.innerHTML = featured
+        ? '<div class="empty-state"><p>Nothing featured yet — open a photo and tap ♥ to vote for your favourites.</p></div>'
+        : '<div class="empty-state"><p>No photos here yet.</p></div>';
+      return;
+    }
+
+    renderedCount = 0;
+    grid.innerHTML = '';
+    appendPhotos();
+  }
+
+  /**
+   * Drops a tile's shimmer once its thumbnail has actually painted.
+   *
+   * Errors clear it too: a tile whose image will never arrive should not sit
+   * there claiming to be working, and the fade-in leaves the image hidden until
+   * the class comes off.
+   */
+  function settleTile(div) {
+    const img = div.querySelector('img');
+    const done = () => div.classList.remove('loading');
+    if (!img) { done(); return; }
+    // An already-cached thumbnail can finish before these listeners attach, and
+    // a load event that has already fired is never replayed.
+    if (img.complete && img.naturalWidth > 0) { done(); return; }
+    img.addEventListener('load', done, { once: true });
+    img.addEventListener('error', done, { once: true });
+  }
+
+  function appendPhotos() {
+    const grid = document.getElementById('photoGrid');
+    const sentinel = document.getElementById('scrollSentinel');
+    if (sentinel) sentinel.remove();
+
+    const startIndex = renderedCount;
+    const batch = visiblePhotos.slice(startIndex, startIndex + PAGE_SIZE);
+    batch.forEach((p, i) => {
+      const div = document.createElement('div');
+      div.className = 'photo-item loading';
+      div.onclick = () => openLightbox(startIndex + i);
+      div.dataset.key = p.file_key;
+      div.innerHTML = `
+        <img src="${gridUrl(p)}" loading="lazy" decoding="async" alt="Photo by ${escapeHtml(p.uploader_name || 'Anonymous')}" />
+        ${currentFilter === 'featured' && p.is_favorite ? '<span class="pick-badge">💍 Couple’s pick</span>' : ''}
+        <div class="photo-info">
+          <span>${escapeHtml(p.uploader_name || 'Anonymous')}</span>
+          <span>${escapeHtml(p.location)}</span>
+        </div>`;
+      settleTile(div);
+      grid.appendChild(div);
+    });
+    renderedCount += batch.length;
+
+    if (renderedCount < visiblePhotos.length) {
+      const sentinel = document.createElement('div');
+      sentinel.id = 'scrollSentinel';
+      grid.appendChild(sentinel);
+      scrollObserver = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting) {
+          scrollObserver.disconnect();
+          appendPhotos();
+        }
+      });
+      scrollObserver.observe(sentinel);
+    }
+  }
+
+  function openLightbox(index) {
+    currentPhotoIndex = index;
+    resetZoom();
+    const img = document.getElementById('lightboxImg');
+    img.style.transform = '';
+    img.style.transition = '';
+    img.style.opacity = '';
+    document.getElementById('lightbox').style.background = '';
+    updateLightbox();
+    document.getElementById('lightbox').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function updateLightbox() {
+    const photo = visiblePhotos[currentPhotoIndex];
+    const img = document.getElementById('lightboxImg');
+    document.getElementById('saveTip').classList.add('hidden');
+    clearStatus();
+    clearFullQualityTimers();
+    lightboxStage = 1;
+    originalRequestedFor = null;
+
+    img.src = gridUrl(photo);
+    document.getElementById('lightboxName').textContent = photo.uploader_name || 'Anonymous';
+    document.getElementById('lightboxLocation').textContent = photo.location;
+    renderLike(photo);
+    document.getElementById('lightboxPrev').style.opacity = currentPhotoIndex === 0 ? '0.3' : '1';
+    document.getElementById('lightboxNext').style.opacity = currentPhotoIndex === visiblePhotos.length - 1 ? '0.3' : '1';
+
+    upgradeToDisplay(photo, img);
+    preloadAdjacent();
+  }
+
+  // Swaps a loaded URL into the lightbox without a flash: waits for the bytes in
+  // a detached Image, then cross-fades.
+  //
+  // Bails if the guest has moved on, or if a higher stage already landed. That
+  // second guard matters: on a slow connection the dwell timer can fire the
+  // original before the display derivative has finished, and without it the late
+  // display load would overwrite full-resolution pixels while the "full quality"
+  // tip is on screen — the guest would then save a downscaled copy.
+  function swapWhenLoaded(photo, imgEl, url, stage, onDone) {
+    const loader = new Image();
+    loader.onload = function() {
+      if (navigating || visiblePhotos[currentPhotoIndex] !== photo) return;
+      if (stage <= lightboxStage) return;
+      // Zoomed in, a fade would blank the very detail the guest is looking at.
+      // Decode first, then swap straight in: the photo just sharpens.
+      if (document.getElementById('lightbox').classList.contains('zoomed')) {
+        const swap = function() {
+          if (navigating || visiblePhotos[currentPhotoIndex] !== photo) return;
+          if (stage <= lightboxStage) return;
+          lightboxStage = stage;
+          imgEl.src = url;
+          if (onDone) onDone();
+        };
+        (loader.decode ? loader.decode() : Promise.resolve()).catch(function() {}).then(swap);
+        return;
+      }
+      lightboxStage = stage;
+      imgEl.style.transition = 'none';
+      imgEl.style.opacity = '0';
+      imgEl.src = url;
+      void imgEl.getBoundingClientRect();
+      imgEl.style.transition = 'opacity 0.2s ease';
+      imgEl.style.opacity = '1';
+      setTimeout(function() { imgEl.style.transition = ''; }, 200);
+      if (onDone) onDone();
+    };
+    loader.src = url;
+  }
+
+  function setStatus(text, tappable) {
+    const el = document.getElementById('lightboxStatus');
+    el.textContent = text;
+    el.classList.remove('hidden');
+    el.classList.toggle('tappable', !!tappable);
+    el.onclick = tappable ? requestFullQuality : null;
+  }
+
+  function clearStatus() {
+    const el = document.getElementById('lightboxStatus');
+    el.classList.add('hidden');
+    el.classList.remove('tappable');
+    el.textContent = '';
+    el.onclick = null;
+  }
+
+  function clearFullQualityTimers() {
+    clearTimeout(fullSizeTimer);
+    clearTimeout(countdownTimer);
+  }
+
+  // Stage 2: the ~250KB display derivative. Cheap enough to load unconditionally,
+  // and sharp enough that most guests never need stage 3.
+  function upgradeToDisplay(photo, imgEl) {
+    // Seen earlier this session, so the original is already cached. Go straight
+    // there, silently — surfacing a loading pill for bytes we hold would be noise.
+    if (fullyLoadedPhotos.has(photo.file_key)) {
+      upgradeToOriginal(photo, imgEl, false);
+      return;
+    }
+
+    swapWhenLoaded(photo, imgEl, displayUrl(photo), 2, null);
+
+    // Data-saver mode: never fetch several MB unasked. This is the only case
+    // where the guest has to do anything, so it is the only case with a control.
+    if (navigator.connection && navigator.connection.saveData) {
+      setStatus(LABEL_TAPPABLE, true);
+      return;
+    }
+
+    // Stage 3 on dwell. Swiping past costs nothing; a short pause fills in full
+    // quality on its own, so by the time anyone reaches to press and hold it is
+    // already there. Nothing to decide, so nothing to tap.
+    countdownTimer = setTimeout(function() {
+      if (visiblePhotos[currentPhotoIndex] === photo) setStatus(LABEL_COUNTDOWN, false);
+    }, COUNTDOWN_AT_MS);
+
+    fullSizeTimer = setTimeout(function() {
+      if (visiblePhotos[currentPhotoIndex] === photo) upgradeToOriginal(photo, imgEl, true);
+    }, FULL_QUALITY_DWELL_MS);
+  }
+
+  // Stage 3: the genuine original. The save tip stays hidden until this lands —
+  // press-and-hold saves whatever is in the <img>, so we only invite it once the
+  // element actually holds full-resolution pixels.
+  // showProgress announces the download. False for photos whose bytes are already
+  // cached, where the load is imperceptible and a status line would just flash.
+  function upgradeToOriginal(photo, imgEl, showProgress) {
+    originalRequestedFor = photo;
+    const url = originalUrl(photo);
+    const tip = document.getElementById('saveTip');
+
+    // Already showing it — just re-reveal the tip. No pending-state flag needed:
+    // originals are served immutable, so a repeat load is a memory-cache hit.
+    if (imgEl.src === url) {
+      lightboxStage = 3;
+      fullyLoadedPhotos.add(photo.file_key);
+      clearStatus();
+      tip.classList.remove('hidden');
+      return;
+    }
+
+    if (showProgress) {
+      setStatus(LABEL_LOADING, false);
+    } else {
+      clearStatus();
+    }
+
+    swapWhenLoaded(photo, imgEl, url, 3, function() {
+      fullyLoadedPhotos.add(photo.file_key);
+      clearStatus();
+      tip.classList.remove('hidden');
+    });
+  }
+
+  // Only reachable in data-saver mode, where the automatic fetch is suppressed.
+  function requestFullQuality() {
+    clearFullQualityTimers();
+    const photo = visiblePhotos[currentPhotoIndex];
+    if (photo) upgradeToOriginal(photo, document.getElementById('lightboxImg'), true);
+  }
+
+  function preloadAdjacent() {
+    [-2, -1, 1, 2].forEach(function(offset) {
+      const idx = currentPhotoIndex + offset;
+      if (idx >= 0 && idx < visiblePhotos.length) {
+        const p = visiblePhotos[idx];
+        // Display derivatives only — never preload originals, or swiping would
+        // cost multiple MB per photo for images the guest may never stop on.
+        const url = displayUrl(p);
+        if (!imgCache.has(url)) {
+          const pre = new Image();
+          imgCache.set(url, pre);
+          pre.src = url;
+        }
+      }
+    });
+    preDecodeNeighbours([1, -1]);
+  }
+
+  function preDecodeNeighbours(offsets) {
+    if (!offsets.length) return;
+    const offset = offsets[0];
+    const rest = offsets.slice(1);
+    const idx = currentPhotoIndex + offset;
+    if (idx < 0 || idx >= visiblePhotos.length) { preDecodeNeighbours(rest); return; }
+    const p = visiblePhotos[idx];
+    const url = gridUrl(p);
+    const preload = document.getElementById('lightboxPreload');
+    preload.src = url;
+    var d = preload.decode ? preload.decode() : Promise.resolve();
+    d.catch(function() {}).then(function() {
+      if (!navigating) preDecodeNeighbours(rest);
+    });
+  }
+
+  function navigatePhoto(dir) {
+    if (navigating) return;
+    const next = currentPhotoIndex + dir;
+    if (next < 0 || next >= visiblePhotos.length) return;
+    navigating = true;
+    resetZoom();
+    clearFullQualityTimers();
+    clearStatus();
+
+    const photo = visiblePhotos[next];
+    const thumbUrl = gridUrl(photo);
+    const img = document.getElementById('lightboxImg');
+    const preload = document.getElementById('lightboxPreload');
+    const exitX = dir > 0 ? '-110%' : '110%';
+    const enterX = dir > 0 ? '110%' : '-110%';
+
+    img.style.transition = 'transform 0.18s ease, opacity 0.18s ease';
+    img.style.transform = 'translateX(' + exitX + ')';
+    img.style.opacity = '0';
+
+    // Decode thumbnail via DOM preload element — tiny file, should finish
+    // well within the 180ms exit window so no spinner on most swipes
+    preload.src = thumbUrl;
+    var decodeReady = (preload.decode ? preload.decode() : Promise.resolve()).catch(function() {});
+    var exitDone = new Promise(function(res) { setTimeout(res, 180); });
+
+    var spinTimer = setTimeout(function() {
+      document.getElementById('lightboxSpinner').classList.add('visible');
+    }, 180);
+
+    Promise.all([exitDone, decodeReady]).then(function() {
+      clearTimeout(spinTimer);
+      document.getElementById('lightboxSpinner').classList.remove('visible');
+      document.getElementById('saveTip').classList.add('hidden');
+      currentPhotoIndex = next;
+      lightboxStage = 1;
+      originalRequestedFor = null;
+      document.getElementById('lightboxName').textContent = photo.uploader_name || 'Anonymous';
+      document.getElementById('lightboxLocation').textContent = photo.location;
+      renderLike(photo);
+      document.getElementById('lightboxPrev').style.opacity = currentPhotoIndex === 0 ? '0.3' : '1';
+      document.getElementById('lightboxNext').style.opacity = currentPhotoIndex === visiblePhotos.length - 1 ? '0.3' : '1';
+      img.src = thumbUrl;
+      img.style.transition = 'none';
+      img.style.transform = 'translateX(' + enterX + ')';
+      img.style.opacity = '0';
+      void img.getBoundingClientRect();
+      img.style.transition = 'transform 0.18s ease, opacity 0.18s ease';
+      img.style.transform = '';
+      img.style.opacity = '1';
+      setTimeout(function() {
+        img.style.transform = '';
+        img.style.transition = '';
+        img.style.opacity = '';
+        navigating = false;
+        upgradeToDisplay(photo, img);
+        preloadAdjacent();
+      }, 180);
+    });
+  }
+
+  // ── Guest likes ────────────────────────────────────────────────────────────
+  // A like belongs to the device: a random guest_id made on the first like or
+  // upload. "Not you?" clears only the name, so the device keeps its likes.
+  function ensureGuestId() {
+    let id = null;
+    try { id = localStorage.getItem('guest_id'); } catch (e) {}
+    if (!id) {
+      id = crypto.randomUUID ? crypto.randomUUID() : uuidFromRandomValues();
+      try { localStorage.setItem('guest_id', id); } catch (e) {}
+    }
+    return id;
+  }
+
+  // crypto.randomUUID arrived in iOS 15.4; older phones at the wedding still
+  // need an id in the same shape the server checks for.
+  function uuidFromRandomValues() {
+    const b = crypto.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+    return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
+  }
+
+  // Sent with the photo list so the server can mark which photos this device
+  // liked or uploaded. A device that has done neither yet has nothing to send.
+  function guestHeaders() {
+    let id = null;
+    try { id = localStorage.getItem('guest_id'); } catch (e) {}
+    return id ? { 'X-Guest-Id': id } : {};
+  }
+
+  function isFeatured(p, min) {
+    return !!p.is_favorite || (p.like_count || 0) >= min;
+  }
+
+  // The couple's picks first, then the most liked; on equal likes, the one
+  // liked most recently. sort() is stable, so anything still tied keeps the
+  // server's newest-upload-first order.
+  function sortFeatured(photos) {
+    return [...photos].sort((a, b) =>
+      (b.is_favorite ? 1 : 0) - (a.is_favorite ? 1 : 0) ||
+      (b.like_count || 0) - (a.like_count || 0) ||
+      String(b.last_liked_at || '').localeCompare(String(a.last_liked_at || ''))
+    );
+  }
+
+  function renderLike(photo) {
+    const btn = document.getElementById('likeBtn');
+    // A guest's own photo shows "Your photo" instead of a button they can't use.
+    btn.hidden = !!photo.mine;
+    document.getElementById('ownPhotoNote').hidden = !photo.mine;
+    btn.classList.toggle('liked', !!photo.liked);
+    btn.setAttribute('aria-pressed', photo.liked ? 'true' : 'false');
+    btn.disabled = likesInFlight.has(photo.id);
+    document.getElementById('likeIcon').textContent = photo.liked ? '♥' : '♡';
+    document.getElementById('likeLabel').textContent = photo.liked ? 'Liked' : 'Like';
+    // The count leads the pill ("3 ♥ Liked") and is left out at zero. The heart
+    // is decorative, so the spoken name carries the count instead.
+    const n = photo.like_count || 0;
+    const likes = n === 1 ? '1 like' : n + ' likes';
+    const count = document.getElementById('likeCount');
+    count.textContent = n;
+    count.hidden = n === 0;
+    btn.setAttribute('aria-label', (photo.liked ? 'Liked' : 'Like') + (n ? ', ' + likes : ''));
+    document.getElementById('ownPhotoNote').textContent = n ? 'Your photo · ' + likes : 'Your photo';
+    document.getElementById('couplePick').hidden = !photo.is_favorite;
+  }
+
+  // Restarts the heart's pop: remove, force a reflow, add back.
+  function popHeart() {
+    const icon = document.getElementById('likeIcon');
+    icon.classList.remove('pop');
+    void icon.offsetWidth;
+    icon.classList.add('pop');
+  }
+
+  // Lets a reply that lands after a swipe update its own photo, not the one
+  // now on screen.
+  function renderLikeIfShowing(photo) {
+    if (visiblePhotos[currentPhotoIndex] === photo) renderLike(photo);
+  }
+
+  function toggleLike() {
+    const photo = visiblePhotos[currentPhotoIndex];
+    if (!photo || likesInFlight.has(photo.id)) return;
+    if (photo.mine) {
+      showShareToast(OWN_PHOTO_MESSAGE);
+      return;
+    }
+    if (!storedGuestName) {
+      openLikeNamePrompt(photo);
+      return;
+    }
+    sendLike(photo, !photo.liked);
+  }
+
+  async function sendLike(photo, liked) {
+    const before = { liked: photo.liked, like_count: photo.like_count };
+    likesInFlight.add(photo.id);
+    // Shown straight away; the server's count replaces it when it answers.
+    photo.liked = liked ? 1 : 0;
+    photo.like_count = Math.max(0, (photo.like_count || 0) + (liked ? 1 : -1));
+    renderLikeIfShowing(photo);
+    if (liked && visiblePhotos[currentPhotoIndex] === photo) popHeart();
+
+    try {
+      const res = await fetch(WORKER_URL + '/like', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photo_id: photo.id, liked, guest_id: ensureGuestId(), name: storedGuestName })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 403 && data.error === 'own_photo') {
+        Object.assign(photo, before, { mine: 1 });
+        showShareToast(OWN_PHOTO_MESSAGE);
+      } else if (!res.ok) {
+        throw new Error(data.error || 'HTTP ' + res.status);
+      } else {
+        photo.liked = data.liked ? 1 : 0;
+        photo.like_count = data.like_count;
+      }
+    } catch (err) {
+      Object.assign(photo, before);
+      showShareToast('Couldn’t save your like — try again');
+    } finally {
+      likesInFlight.delete(photo.id);
+      renderLikeIfShowing(photo);
+    }
+  }
+
+  function openLikeNamePrompt(photo) {
+    pendingLikePhoto = photo;
+    const input = document.getElementById('likeNameInput');
+    input.value = '';
+    document.getElementById('likeNameBtn').disabled = true;
+    document.getElementById('likeNameOverlay').classList.add('open');
+    input.focus();
+  }
+
+  // Same rule as the upload name step: nothing to confirm until a name is typed.
+  function checkLikeNameInput() {
+    const val = document.getElementById('likeNameInput').value.trim();
+    document.getElementById('likeNameBtn').disabled = val.length === 0;
+  }
+
+  function closeLikeNamePrompt() {
+    pendingLikePhoto = null;
+    document.getElementById('likeNameOverlay').classList.remove('open');
+  }
+
+  // Saved where the upload flow keeps it, so their first upload skips the name step.
+  function confirmLikeName() {
+    const name = document.getElementById('likeNameInput').value.trim();
+    if (!name) return;
+    localStorage.setItem('uploader_name', name);
+    storedGuestName = name;
+    const photo = pendingLikePhoto;
+    closeLikeNamePrompt();
+    if (photo && !photo.liked && !likesInFlight.has(photo.id)) sendLike(photo, true);
+  }
+
+  function closeLightbox() {
+    navigating = false;
+    resetZoom();
+    clearFullQualityTimers();
+    clearStatus();
+    // Syncs are skipped while the lightbox is open, so catch up on the way out —
+    // covers backgrounding the app mid-photo and returning to it later.
+    setTimeout(function() { syncGallery(); }, 0);
+    const img = document.getElementById('lightboxImg');
+    img.style.transform = '';
+    img.style.transition = '';
+    img.style.opacity = '';
+    document.getElementById('lightbox').style.background = '';
+    document.getElementById('lightbox').style.transition = '';
+    document.getElementById('lightboxSpinner').classList.remove('visible');
+    document.getElementById('lightbox').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  document.addEventListener('keydown', e => {
+    if (!document.getElementById('lightbox').classList.contains('open')) return;
+    // Typing a name in the like prompt mustn't flip photos underneath it.
+    if (document.getElementById('likeNameOverlay').classList.contains('open')) {
+      if (e.key === 'Escape') closeLikeNamePrompt();
+      if (e.key === 'Enter') confirmLikeName();
+      return;
+    }
+    if (e.key === 'ArrowRight') navigatePhoto(1);
+    if (e.key === 'ArrowLeft') navigatePhoto(-1);
+    if (e.key === 'Escape') closeLightbox();
+  });
+
+  // A gesture that starts on a control is a tap, not a swipe, and must not reach
+  // the swipe handler's preventDefault().
+  function isSwipeExempt(target) {
+    return !!(target && target.closest && target.closest('button, a, input, select, textarea'));
+  }
+
+  // ── Pinch-to-zoom ──────────────────────────────────────────────────────────
+  // The photo zooms, never the page. touch-action: none on the overlay stops the
+  // browser's own pinch and double-tap zoom; the handlers below apply the
+  // gesture to the <img> alone as translate(x, y) scale(s) about its centre.
+  //
+  // While zoomed, one finger pans instead of swiping, so a guest can look around
+  // a photo without being thrown to the next one. Swipe and swipe-down-to-close
+  // come back as soon as the photo is back at its normal size.
+  const ZOOM_MAX = 4;
+  const ZOOM_DOUBLE_TAP = 2.5;
+  const DOUBLE_TAP_MS = 300;
+  let zoomScale = 1;
+  let zoomX = 0;
+  let zoomY = 0;
+  // Which kind of gesture the fingers currently down belong to: null (a normal
+  // swipe or tap), 'pinch' or 'pan'. Held until every finger lifts, so lifting
+  // one finger of a pinch never turns the other into a swipe.
+  let zoomGesture = null;
+  let pinchStart = null;
+  let panStart = null;
+  let tapStart = null;
+  let lastTap = null;
+
+  // Keeps one axis of the zoomed photo in view: a photo larger than the screen
+  // can be panned until its edge meets the screen's edge, never past it; one
+  // smaller than the screen can't be dragged off it. size is the scaled size,
+  // centre the photo's untransformed centre, view the screen size.
+  function clampAxis(offset, size, centre, view) {
+    const a = size / 2 - centre;
+    const b = view - centre - size / 2;
+    return Math.min(Math.max(offset, Math.min(a, b)), Math.max(a, b));
+  }
+
+  // The offset that keeps the photo point first under the pinch midpoint under
+  // the midpoint now, at the new scale. local is that point relative to the
+  // photo's centre, unscaled; centre is the photo's untransformed centre.
+  function pinchOffset(midpoint, centre, local, scale) {
+    return midpoint - centre - scale * local;
+  }
+
+  // Untransformed size and centre of the photo. offsetWidth ignores transforms;
+  // the bounding rect does not, but a scale about the centre leaves the centre
+  // where it was, so taking the current pan back off gives the resting centre.
+  function zoomGeometry() {
+    const img = document.getElementById('lightboxImg');
+    const r = img.getBoundingClientRect();
+    return {
+      w: img.offsetWidth,
+      h: img.offsetHeight,
+      cx: r.left + r.width / 2 - zoomX,
+      cy: r.top + r.height / 2 - zoomY,
+    };
+  }
+
+  function clampZoom(g) {
+    if (zoomScale <= 1) { zoomScale = 1; zoomX = 0; zoomY = 0; return; }
+    zoomX = clampAxis(zoomX, g.w * zoomScale, g.cx, window.innerWidth);
+    zoomY = clampAxis(zoomY, g.h * zoomScale, g.cy, window.innerHeight);
+  }
+
+  function applyZoom(animate) {
+    const img = document.getElementById('lightboxImg');
+    img.style.transition = animate ? 'transform 0.25s ease' : 'none';
+    img.style.transform = zoomScale === 1 && !zoomX && !zoomY
+      ? ''
+      : 'translate(' + zoomX + 'px, ' + zoomY + 'px) scale(' + zoomScale + ')';
+    document.getElementById('lightbox').classList.toggle('zoomed', zoomScale > 1);
+    if (animate) {
+      setTimeout(function() {
+        if (!zoomGesture) img.style.transition = '';
+      }, 250);
+    }
+  }
+
+  // Forgets the zoom without touching the <img> — every caller is about to set
+  // its transform for its own animation.
+  function resetZoom() {
+    zoomScale = 1;
+    zoomX = 0;
+    zoomY = 0;
+    zoomGesture = null;
+    pinchStart = null;
+    panStart = null;
+    lastTap = null;
+    document.getElementById('lightbox').classList.remove('zoomed');
+  }
+
+  function beginPinch(touches) {
+    const a = touches[0], b = touches[1];
+    const g = zoomGeometry();
+    const mx = (a.clientX + b.clientX) / 2;
+    const my = (a.clientY + b.clientY) / 2;
+    pinchStart = {
+      dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1,
+      scale: zoomScale,
+      g: g,
+      lx: (mx - g.cx - zoomX) / zoomScale,
+      ly: (my - g.cy - zoomY) / zoomScale,
+    };
+  }
+
+  function beginPan(touch) {
+    panStart = { x: touch.clientX, y: touch.clientY, zx: zoomX, zy: zoomY, g: zoomGeometry() };
+  }
+
+  // Zooming in is the clearest sign a guest wants detail, so fetch the original
+  // now rather than waiting out the dwell timer — otherwise they'd be peering
+  // at the softer display size for the first couple of seconds. Counts as
+  // asking in data-saver mode too: the pinch is the request.
+  function upgradeForZoom() {
+    const photo = visiblePhotos[currentPhotoIndex];
+    if (!photo || navigating || lightboxStage >= 3 || originalRequestedFor === photo) return;
+    clearFullQualityTimers();
+    upgradeToOriginal(photo, document.getElementById('lightboxImg'), true);
+  }
+
+  // Double-tap zooms in on the spot tapped, or back out if already zoomed —
+  // what every phone's own photo viewer does.
+  function toggleZoomAt(x, y) {
+    if (zoomScale > 1) {
+      zoomScale = 1; zoomX = 0; zoomY = 0;
+    } else {
+      const g = zoomGeometry();
+      upgradeForZoom();
+      zoomScale = ZOOM_DOUBLE_TAP;
+      zoomX = pinchOffset(x, g.cx, x - g.cx, zoomScale);
+      zoomY = pinchOffset(y, g.cy, y - g.cy, zoomScale);
+      clampZoom(g);
+    }
+    applyZoom(true);
+  }
+
+  // A swipe or swipe-down already in flight when a second finger lands hands
+  // over to the pinch: put the photo and backdrop back where the zoom has them.
+  function abandonSwipe() {
+    swipeDir = null;
+    const lb = document.getElementById('lightbox');
+    lb.style.transition = 'none';
+    lb.style.background = '';
+    applyZoom(false);
+  }
+
+  // iOS Safari fires its own gesture events for a pinch and, on some versions,
+  // zooms the page from them regardless of touch-action.
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(function(type) {
+    document.addEventListener(type, function(e) {
+      if (document.getElementById('lightbox').classList.contains('open')) e.preventDefault();
+    }, { passive: false });
+  });
+
+  // A rotation changes the photo's size and position under the zoom; starting
+  // again at fit-to-screen is better than leaving it panned off somewhere.
+  window.addEventListener('resize', function() {
+    if (zoomScale === 1) return;
+    resetZoom();
+    applyZoom(false);
+  });
+
+  document.getElementById('lightbox').addEventListener('touchstart', e => {
+    if (navigating) return;
+
+    if (e.touches.length >= 2) {
+      // Never let the browser see a two-finger gesture start.
+      e.preventDefault();
+      if (zoomGesture !== 'pinch') {
+        if (swipeDir) abandonSwipe();
+        zoomGesture = 'pinch';
+        panStart = null;
+        tapStart = null;
+        beginPinch(e.touches);
+        upgradeForZoom();
+      }
+      return;
+    }
+
+    // First finger down: a new gesture. Zoomed, it pans; otherwise it is a
+    // swipe or a tap, handled as before.
+    zoomGesture = null;
+    const t = e.touches[0];
+    swipeIgnore = isSwipeExempt(e.target);
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+    swipeDir = null;
+    tapStart = swipeIgnore ? null : { x: t.clientX, y: t.clientY, time: Date.now() };
+    if (zoomScale > 1 && !swipeIgnore) {
+      zoomGesture = 'pan';
+      beginPan(t);
+    }
+  }, { passive: false });
+
+  document.getElementById('lightbox').addEventListener('touchmove', e => {
+    if (navigating) return;
+
+    if (tapStart && e.touches.length === 1) {
+      const t = e.touches[0];
+      if (Math.abs(t.clientX - tapStart.x) > 10 || Math.abs(t.clientY - tapStart.y) > 10) tapStart = null;
+    }
+
+    if (zoomGesture === 'pinch') {
+      e.preventDefault();
+      if (e.touches.length < 2 || !pinchStart) return;
+      const a = e.touches[0], b = e.touches[1];
+      const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      const mx = (a.clientX + b.clientX) / 2;
+      const my = (a.clientY + b.clientY) / 2;
+      // Allowed a little under 1 so pinching in has some give; it springs back
+      // when the fingers lift.
+      zoomScale = Math.min(ZOOM_MAX, Math.max(0.75, pinchStart.scale * dist / pinchStart.dist));
+      zoomX = pinchOffset(mx, pinchStart.g.cx, pinchStart.lx, zoomScale);
+      zoomY = pinchOffset(my, pinchStart.g.cy, pinchStart.ly, zoomScale);
+      applyZoom(false);
+      return;
+    }
+
+    if (zoomGesture === 'pan') {
+      e.preventDefault();
+      if (!panStart) return;
+      const t = e.touches[0];
+      zoomX = panStart.zx + (t.clientX - panStart.x);
+      zoomY = panStart.zy + (t.clientY - panStart.y);
+      clampZoom(panStart.g);
+      applyZoom(false);
+      return;
+    }
+
+    if (swipeIgnore) return;
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = e.touches[0].clientY - touchStartY;
+    if (!swipeDir) {
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+        swipeDir = Math.abs(dy) > Math.abs(dx) ? 'v' : 'h';
+      }
+    }
+    if (swipeDir === 'v' && dy > 0) {
+      e.preventDefault();
+      const img = document.getElementById('lightboxImg');
+      const progress = Math.min(dy / 300, 1);
+      const scale = 1 - progress * 0.3;
+      img.style.transition = 'none';
+      img.style.transform = 'translateY(' + dy + 'px) scale(' + scale + ')';
+      const alpha = Math.max(0.3, 1 - progress * 0.7);
+      document.getElementById('lightbox').style.transition = 'none';
+      document.getElementById('lightbox').style.background = 'rgba(0,0,0,' + alpha + ')';
+    }
+    if (swipeDir === 'h') {
+      e.preventDefault();
+      const img = document.getElementById('lightboxImg');
+      const atStart = currentPhotoIndex === 0;
+      const atEnd = currentPhotoIndex === visiblePhotos.length - 1;
+      const clamped = (dx > 0 && atStart) || (dx < 0 && atEnd) ? dx * 0.2 : dx;
+      img.style.transition = 'none';
+      img.style.transform = 'translateX(' + clamped + 'px)';
+    }
+  }, { passive: false });
+
+  document.getElementById('lightbox').addEventListener('touchend', e => {
+    if (zoomGesture === 'pinch') {
+      // Still one finger down: keep the photo where the pinch left it and let
+      // that finger carry on as a pan once everything settles.
+      if (e.touches.length >= 2) return;
+      clampZoom(zoomGeometry());
+      applyZoom(true);
+      if (e.touches.length === 1 && zoomScale > 1) {
+        zoomGesture = 'pan';
+        beginPan(e.touches[0]);
+      } else if (e.touches.length === 0) {
+        zoomGesture = null;
+      }
+      pinchStart = null;
+      return;
+    }
+
+    // Double-tap: two quick taps close together on the photo.
+    const t = e.changedTouches[0];
+    const wasTap = e.touches.length === 0 && tapStart && !swipeDir &&
+      Date.now() - tapStart.time < 250 &&
+      e.target && e.target.closest && e.target.closest('#lightboxInner');
+    if (wasTap) {
+      const now = Date.now();
+      if (lastTap && now - lastTap.time < DOUBLE_TAP_MS &&
+          Math.abs(t.clientX - lastTap.x) < 30 && Math.abs(t.clientY - lastTap.y) < 30) {
+        lastTap = null;
+        tapStart = null;
+        zoomGesture = null;
+        panStart = null;
+        e.preventDefault();
+        toggleZoomAt(t.clientX, t.clientY);
+        return;
+      }
+      lastTap = { x: t.clientX, y: t.clientY, time: now };
+    } else if (e.touches.length === 0) {
+      lastTap = null;
+    }
+    tapStart = null;
+
+    if (zoomGesture === 'pan') {
+      if (e.touches.length === 0) { zoomGesture = null; panStart = null; }
+      return;
+    }
+
+    if (swipeIgnore) return;
+    const dx = touchStartX - t.clientX;
+    const dy = t.clientY - touchStartY;
+
+    if (swipeDir === 'v') {
+      if (dy > 80) {
+        const img = document.getElementById('lightboxImg');
+        img.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+        img.style.transform = 'translateY(100vh) scale(0.7)';
+        img.style.opacity = '0';
+        document.getElementById('lightbox').style.transition = 'background 0.2s ease';
+        document.getElementById('lightbox').style.background = 'rgba(0,0,0,0)';
+        setTimeout(closeLightbox, 200);
+      } else {
+        const img = document.getElementById('lightboxImg');
+        img.style.transition = 'transform 0.25s ease';
+        img.style.transform = '';
+        document.getElementById('lightbox').style.transition = 'background 0.25s ease';
+        document.getElementById('lightbox').style.background = '';
+        setTimeout(function() {
+          img.style.transition = '';
+          document.getElementById('lightbox').style.transition = '';
+        }, 250);
+      }
+      return;
+    }
+
+    if (swipeDir === 'h') {
+      const dir = dx > 0 ? 1 : -1;
+      const canNavigate = dir === 1 ? currentPhotoIndex < visiblePhotos.length - 1 : currentPhotoIndex > 0;
+      if (Math.abs(dx) > 60 && canNavigate) {
+        navigatePhoto(dir);
+      } else {
+        const img = document.getElementById('lightboxImg');
+        img.style.transition = 'transform 0.3s ease';
+        img.style.transform = '';
+        setTimeout(function() { img.style.transition = ''; }, 300);
+      }
+    }
+  });
+
+  // iOS cancels touches when it takes over (a long-press save sheet, an
+  // incoming call). Settle any zoom gesture so the next touch starts clean.
+  document.getElementById('lightbox').addEventListener('touchcancel', () => {
+    tapStart = null;
+    if (zoomGesture === 'pinch') { clampZoom(zoomGeometry()); applyZoom(true); }
+    zoomGesture = null;
+    pinchStart = null;
+    panStart = null;
+  });
+
+  // Resume detection. visibilitychange covers tab switches and the phone being
+  // locked; pageshow with persisted covers iOS Safari restoring from the
+  // back/forward cache, where visibilitychange does not always fire; focus
+  // covers desktop window switching. All three funnel through the same
+  // debounced check, so a resume costs at most one small request.
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') syncGallery();
+  });
+  window.addEventListener('pageshow', function(e) {
+    if (e.persisted) syncGallery();
+  });
+  window.addEventListener('focus', function() { syncGallery(); });
+
+  window.addEventListener('popstate', function() {
+    const galleryOpen = document.getElementById('galleryPage').classList.contains('active');
+    if (galleryOpen) {
+      showUpload();
+    }
+  });
+
+  async function shareApp() {
+    // Built from wherever the site is served and the current passphrase, so it
+    // follows a domain move or a passphrase change made in admin Settings.
+    const shareUrl = location.origin + '/?p=' + encodeURIComponent(document.body.dataset.passphrase);
+    const shareData = {
+      title: document.body.dataset.couple + ' · Wedding Photos',
+      text: "Share your photos from the wedding and see everyone's memories here:",
+      url: shareUrl
+    };
+
+    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        if (err.name !== 'AbortError') copyFallback(shareUrl);
+      }
+    } else {
+      copyFallback(shareUrl);
+    }
+  }
+
+  function ordinal(n) {
+    const s = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+
+  async function refreshRankDisplay() {
+    const el = document.getElementById('rankDisplay');
+    if (!storedGuestName) { el.style.display = 'none'; return; }
+    try {
+      const res = await fetch(WORKER_URL + '/leaderboard?name=' + encodeURIComponent(storedGuestName));
+      const d = await res.json();
+      if (!d.rank) { el.style.display = 'none'; return; }
+      let msg = '';
+      if (d.total_uploaders === 1) {
+        msg = "You're the only one uploading so far — keep it up!";
+      } else if (d.rank === 1 && !d.tied) {
+        msg = `🥇 You're leading the pack with ${d.guest_total} photo${d.guest_total !== 1 ? 's' : ''}`;
+      } else if (d.rank === 2 && !d.tied) {
+        msg = `🥈 You're in 2nd place with ${d.guest_total} photo${d.guest_total !== 1 ? 's' : ''}`;
+      } else if (d.rank === 3 && !d.tied) {
+        msg = `🥉 You're in 3rd place with ${d.guest_total} photo${d.guest_total !== 1 ? 's' : ''}`;
+      } else if (d.rank === d.total_uploaders && !d.tied) {
+        msg = `You're in last place — one more upload could change that!`;
+      } else if (d.tied) {
+        msg = `You're tied for ${ordinal(d.rank)} place with ${d.guest_total} photo${d.guest_total !== 1 ? 's' : ''}`;
+      } else {
+        msg = `You're in ${ordinal(d.rank)} place out of ${d.total_uploaders} guests with ${d.guest_total} photo${d.guest_total !== 1 ? 's' : ''}`;
+      }
+      el.textContent = msg;
+      el.style.display = 'block';
+    } catch {
+      el.style.display = 'none';
+    }
+  }
+
+  async function showSuccessRank(uploadCount) {
+    if (!storedGuestName) return;
+    try {
+      const res = await fetch(WORKER_URL + '/leaderboard?name=' + encodeURIComponent(storedGuestName));
+      const d = await res.json();
+      const el = document.getElementById('rankMessage');
+      if (!el) return;
+      let msg = '';
+      let trophy = '';
+      // total_uploaders counts distinct names, not uploads, so being the only
+      // uploader is not the same as this being your first upload. Without the
+      // second branch the first guest of the day is told they are "the first to
+      // upload" on every batch they send, which reads as though the previous
+      // one did not register. guest_total already includes the batch just sent,
+      // so it matching uploadCount is what makes this the first one.
+      if (d.total_uploaders === 1 && d.guest_total === uploadCount) {
+        msg = "You're the first to upload — get the ball rolling!";
+      } else if (d.total_uploaders === 1) {
+        msg = `${d.guest_total} photos and still the only one here — you're setting the pace!`;
+      } else if (d.rank === 1 && !d.tied) {
+        trophy = '🥇';
+        msg = `You're leading the pack! ${d.guest_total} photos and nobody can touch you yet — keep them coming!`;
+        triggerConfetti();
+      } else if (d.rank === 2 && !d.tied) {
+        trophy = '🥈';
+        const gap = d.first_place_total - d.guest_total;
+        msg = `So close! You're just ${gap} photo${gap !== 1 ? 's' : ''} behind ${d.first_place_name} — think you can take the top spot?`;
+      } else if (d.rank === 3 && !d.tied) {
+        trophy = '🥉';
+        const gap = d.second_place_total - d.guest_total;
+        msg = `You're in 3rd place with ${d.guest_total} photos — just ${gap} photo${gap !== 1 ? 's' : ''} behind ${d.second_place_name} for the silver. Keep them coming!`;
+      } else if (d.rank === d.total_uploaders && !d.tied) {
+        msg = `You're in last place but every photo counts — upload more and climb your way up!`;
+      } else if (d.tied) {
+        msg = `You're tied for ${ordinal(d.rank)} place with ${d.guest_total} photo${d.guest_total !== 1 ? 's' : ''} — upload more to pull ahead!`;
+      } else {
+        msg = `You're in ${ordinal(d.rank)} place out of ${d.total_uploaders} guests with ${d.guest_total} photo${d.guest_total !== 1 ? 's' : ''} — upload more to climb the ranks!`;
+      }
+      el.textContent = trophy ? trophy + ' ' + msg : msg;
+    } catch {
+      const el = document.getElementById('rankMessage');
+      if (el) el.textContent = '';
+    }
+  }
+
+  function triggerConfetti() {
+    const card = document.querySelector('.card');
+    if (!card) return;
+    card.style.position = 'relative';
+    card.style.overflow = 'hidden';
+    const colors = getComputedStyle(document.documentElement)
+      .getPropertyValue('--confetti-colors').split(',').map(c => c.trim()).filter(Boolean);
+    for (let i = 0; i < 30; i++) {
+      const piece = document.createElement('div');
+      piece.className = 'confetti-piece';
+      piece.style.left = Math.random() * 100 + '%';
+      piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+      piece.style.animationDelay = Math.random() * 1 + 's';
+      piece.style.animationDuration = (2 + Math.random()) + 's';
+      card.appendChild(piece);
+      setTimeout(() => piece.remove(), 3500);
+    }
+  }
+
+  function copyFallback(url) {
+    navigator.clipboard.writeText(url).then(function() {
+      showShareToast('Link copied to clipboard');
+    }).catch(function() {
+      showShareToast('Copy this link: ' + url);
+    });
+  }
+
+  function showShareToast(msg) {
+    const existing = document.getElementById('shareToast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.id = 'shareToast';
+    toast.textContent = msg;
+    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--text-primary);color:var(--bg-primary);padding:10px 20px;border-radius:20px;font-size:13px;z-index:200;white-space:nowrap;font-family:-apple-system,sans-serif;';
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.remove(); }, 2500);
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{THEME}}" data-page="admin-gate">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Set up admin · {{COUPLE}}</title>
+  <!-- Shown at /admin only while no admin password exists: a brand-new
+       deployment. Shares data-page="admin-gate" so themes style it like the
+       sign-in page. -->
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-secondary: #faf9f7;
+      --bg-card: #ffffff;
+      --text-primary: #1a1a1a;
+      --text-secondary: #555;
+      --border-strong: #ddd;
+      --accent-btn: #534AB7;
+      --accent-btn-hover: #4a42a6;
+      --accent-ring: rgba(83,74,183,.15);
+      --on-accent: #ffffff;
+      --danger: #c43a3a;
+    }
+    body { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg-secondary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 2rem; }
+    .card { background: var(--bg-card); border-radius: 12px; padding: 2rem; width: 100%; max-width: 380px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    h1 { font-size: 1.1rem; font-weight: 600; margin-bottom: .75rem; color: var(--text-primary); }
+    .intro { font-size: 14px; line-height: 1.5; color: var(--text-secondary); margin-bottom: 1.25rem; }
+    input { width: 100%; padding: 10px 14px; border: 1px solid var(--border-strong); border-radius: 8px; font-size: 15px; outline: none; }
+    input + input { margin-top: 10px; }
+    input:focus { border-color: var(--accent-btn); box-shadow: 0 0 0 3px var(--accent-ring); }
+    button { width: 100%; margin-top: 12px; padding: 11px; background: var(--accent-btn); color: var(--on-accent); border: none; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; }
+    button:hover { background: var(--accent-btn-hover); }
+    button:disabled { opacity: .6; cursor: default; }
+    .err { margin-top: 10px; color: var(--danger); font-size: 13px; display: none; }
+  </style>
+{{THEME_HEAD}}
+</head>
+<body>
+  <div class="card">
+    <h1>Create your admin password</h1>
+    <p class="intro">
+      Welcome! This site doesn't have an admin password yet. Choose one now:
+      it's how you'll manage photos and settings. Keep it somewhere safe.
+      Guests never need it.
+    </p>
+    <form id="f">
+      <input type="password" id="p" placeholder="New password (at least 10 characters)" autofocus autocomplete="new-password" minlength="10" required />
+      <input type="password" id="p2" placeholder="Type it again" autocomplete="new-password" required />
+      <button type="submit" id="btn">Create password</button>
+      <p class="err" id="err"></p>
+    </form>
+  </div>
+  <script>
+    document.getElementById('f').onsubmit = async function(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn');
+      const err = document.getElementById('err');
+      const password = document.getElementById('p').value;
+      const show = msg => { err.textContent = msg; err.style.display = 'block'; };
+      err.style.display = 'none';
+      if (password !== document.getElementById('p2').value) return show("The two passwords don't match.");
+      btn.disabled = true; btn.textContent = 'Creating…';
+      try {
+        const res = await fetch('/admin/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+        if (res.ok) { window.location.href = '/admin'; return; }
+        if (res.status === 409) { window.location.reload(); return; }
+        const data = await res.json().catch(() => ({}));
+        show(data.error || 'Something went wrong. Please try again.');
+      } catch (_) { show('Something went wrong. Please try again.'); }
+      btn.disabled = false; btn.textContent = 'Create password';
+    };
+  </script>
+</body>
+</html>

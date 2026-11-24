@@ -1,0 +1,60 @@
+name = "wedding-photos"
+main = "src/worker.js"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Serves the site at https://wedding-photos.<your-subdomain>.workers.dev, which
+# is free. Once you've added a custom domain (see README), you can set this to
+# false so the site is only reachable there.
+workers_dev = true
+preview_urls = false
+
+# The storage below has no IDs on purpose. On the first `wrangler deploy`, or
+# when you use the Deploy to Cloudflare button, Cloudflare creates each one in
+# your account. A local deploy then writes the new IDs back into this file.
+# Keep the binding names: the code refers to them.
+
+[[r2_buckets]]
+binding = "BUCKET"
+
+[[d1_databases]]
+binding = "DB"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+
+# Cloudflare Images makes the small gallery tiles and the lightbox size from
+# each upload. Without it the app still works, but it serves full-size originals.
+[images]
+binding = "IMAGES"
+
+[[queues.producers]]
+queue = "wedding-photos-derivatives"
+binding = "PHOTO_QUEUE"
+
+# Repairs any display sizes the queue gave up on. Off until you switch the site
+# to Live, and switchable in admin → Settings.
+[triggers]
+crons = ["*/15 * * * *"]
+
+# One photo per batch. That stays within the free plan's per-invocation limits,
+# and image transforms fail less often when they don't run back to back.
+[[queues.consumers]]
+queue = "wedding-photos-derivatives"
+max_batch_size = 1
+max_batch_timeout = 5
+max_retries = 3
+# No dead letter queue: a message that runs out of retries is dropped, and the
+# scheduled repair (above) rebuilds whatever it left missing.
+
+# Keeps the Worker's logs, so you can see failures after the fact in the
+# dashboard (Workers & Pages → wedding-photos → Logs).
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# Theme stylesheets are imported into the Worker as text. Don't remove this.
+[[rules]]
+type = "Text"
+globs = ["**/*.css"]
+fallthrough = true

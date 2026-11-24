@@ -1,0 +1,16 @@
+{
+  "name": "wedding-photos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A private photo-sharing site for your wedding, on your own free Cloudflare account.",
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "deploy": "wrangler deploy",
+    "test": "node test/run-all.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.87.0"
+  }
+}

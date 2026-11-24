@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{THEME}}" data-page="admin-gate">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · {{COUPLE}}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-secondary: #faf9f7;
+      --bg-card: #ffffff;
+      --text-primary: #1a1a1a;
+      --border-strong: #ddd;
+      --accent-btn: #534AB7;
+      --accent-btn-hover: #4a42a6;
+      --accent-ring: rgba(83,74,183,.15);
+      --on-accent: #ffffff;
+      --danger: #c43a3a;
+    }
+    body { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg-secondary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 2rem; }
+    .card { background: var(--bg-card); border-radius: 12px; padding: 2rem; width: 100%; max-width: 360px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    h1 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-primary); }
+    input { width: 100%; padding: 10px 14px; border: 1px solid var(--border-strong); border-radius: 8px; font-size: 15px; outline: none; }
+    input:focus { border-color: var(--accent-btn); box-shadow: 0 0 0 3px var(--accent-ring); }
+    button { width: 100%; margin-top: 12px; padding: 11px; background: var(--accent-btn); color: var(--on-accent); border: none; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; }
+    button:hover { background: var(--accent-btn-hover); }
+    button:disabled { opacity: .6; cursor: default; }
+    .err { margin-top: 10px; color: var(--danger); font-size: 13px; display: none; }
+  </style>
+{{THEME_HEAD}}
+</head>
+<body>
+  <div class="card">
+    <h1>Admin</h1>
+    <form id="f">
+      <input type="password" id="p" placeholder="Password" autofocus autocomplete="current-password" />
+      <button type="submit" id="btn">Sign in</button>
+      <p class="err" id="err">Incorrect password.</p>
+    </form>
+  </div>
+  <script>
+    document.getElementById('f').onsubmit = async function(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn');
+      const err = document.getElementById('err');
+      btn.disabled = true; btn.textContent = 'Signing in…'; err.style.display = 'none';
+      try {
+        const res = await fetch('/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: document.getElementById('p').value })
+        });
+        if (res.ok) { window.location.href = '/admin'; return; }
+        err.style.display = 'block';
+      } catch (_) { err.style.display = 'block'; }
+      btn.disabled = false; btn.textContent = 'Sign in';
+    };
+  </script>
+</body>
+</html>
