@@ -35,7 +35,7 @@ const api = new Function(
       .map(grabConst).join('\n')}
    const DEFAULT_THEME = 'classic';
    const THEMES = { classic: { name: 'Classic', description: '', head: '' } };
-   ${['json', 'escapeHtml', 'coupleDisplay', 'coupleHeadingHtml', 'renderPage', 'parseLocations',
+   ${['json', 'escapeHtml', 'coupleDisplay', 'coupleHeadingHtml', 'renderPage', 'resolveTheme', 'themeList', 'parseLocations',
       'validateLocations', 'handleSetLocations'].map(grab).join('\n')}
    return { DEFAULT_LOCATIONS, renderPage, parseLocations, validateLocations, handleSetLocations };`
 )();

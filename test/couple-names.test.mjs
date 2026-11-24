@@ -32,6 +32,8 @@ const { coupleDisplay, renderPage, handleSetCoupleNames } = new Function(
    ${grabFunction('coupleDisplay')}
    ${grabFunction('escapeHtml')}
    ${grabFunction('renderPage')}
+   ${grabFunction('resolveTheme')}
+   ${grabFunction('themeList')}
    const renderNames = (html, names) => renderPage(html, { names, locations: [] });
    ${grabFunction('handleSetCoupleNames')}
    return { coupleDisplay, renderPage: renderNames, handleSetCoupleNames };`

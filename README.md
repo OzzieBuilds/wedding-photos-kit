@@ -113,6 +113,8 @@ Sign in at your site's `/admin` page, open the **⋯** menu, then **Settings**:
 2. **Time zone:** filled in from your device. Change it if the wedding is
    somewhere else, so the photo stats show local times.
 3. **Theme ›:** choose how the site looks. Each choice shows a live preview.
+   To make your own, tap **How to make one**: it copies a prompt for Claude,
+   and **Import theme** adds the CSS file Claude gives you. No redeploy needed.
 4. **Locations ›:** one to four moments guests can file photos under, each with
    an emoji. These lock once photos arrive, so set them first.
 5. **Guest access ›:** choose the passphrase guests will use (4–40 letters,

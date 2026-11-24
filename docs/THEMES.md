@@ -3,6 +3,16 @@
 Written for a developer, or an AI coding assistant such as Claude Code, asked to add a theme.
 `public/themes/redrock.css` is the reference implementation — read it first.
 
+There are two ways to ship a theme:
+
+- **Import it** (no code, no redeploy): write one CSS file with the header
+  below and import it in admin → Settings → Theme → **Import theme**. It's
+  stored in the site's database. This is the route for site owners; the admin
+  page's **How to make one** screen copies a prompt that has Claude write the
+  file. See [Importing](#importing-a-theme).
+- **Build it in** (for this repo): add it to `public/themes/` and register it,
+  as in [Steps](#steps), so every new install gets it.
+
 ## Ground rules
 
 1. **Look only.** Never change text, features or behaviour. A theme is CSS and
@@ -170,6 +180,33 @@ Headless Chrome or Brave driven over the DevTools protocol works well for this
 `Emulation.setEmulatedMedia`). If you changed any page markup, take the same
 screenshots in Classic **before and after** and diff them pixel by pixel —
 Classic must be unchanged.
+
+## Importing a theme
+
+An imported theme is the same CSS as a built-in one, in one file that starts
+with this header (the import screen fills in the name and description from it):
+
+```css
+/* @theme
+name: Garden
+description: Sage and blush, botanical borders
+*/
+@import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;700&display=swap');
+
+:root { /* ... */ }
+```
+
+- Fonts load with `@import` from `fonts.googleapis.com`, right after the header
+  (there's no `head` entry for an imported theme).
+- The import is refused if the CSS contains `</style`, imports from anywhere
+  but Google Fonts, uses a `url()` that isn't `data:` or Google Fonts, or is
+  over 200KB. A name that matches a built-in theme is refused too.
+- Importing the same name again replaces the theme. Importing doesn't switch to
+  it; choose it in the list after checking its thumbnail.
+- If a theme breaks the admin page, open `/admin?theme=classic`.
+
+The in-app prompt lives in `public/admin.html` (`themePromptTemplate`). It
+summarises this file, so keep the two in step.
 
 ## A prompt to start with
 

@@ -3279,6 +3279,53 @@ var qrcode = function() {
       font-size: 14px;
       cursor: pointer;
     }
+    /* Settings → Theme → your own theme */
+    .settings-subpanel-overlay { z-index: 220; }
+    .settings-theme-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .settings-import-form { display: flex; flex-direction: column; gap: 14px; }
+    .settings-file-input { display: none; }
+    .settings-textarea {
+      display: block;
+      width: 100%;
+      min-height: 160px;
+      resize: vertical;
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .settings-textarea-short { min-height: 0; font-family: inherit; font-size: 15px; }
+    .settings-steps {
+      margin: 0 0 14px;
+      padding-left: 22px;
+      font-size: 14px;
+      color: var(--text-primary);
+      line-height: 1.5;
+    }
+    .settings-steps li:not(:last-child) { margin-bottom: 8px; }
+    .settings-inline-link { color: var(--accent-text); }
+    .settings-code {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 13px;
+      color: var(--text-primary);
+      overflow-wrap: anywhere;
+    }
+    .settings-prompt { margin-top: 14px; font-size: 14px; color: var(--text-secondary); }
+    .settings-prompt summary { cursor: pointer; }
+    .settings-prompt-text {
+      margin: 10px 0 0;
+      padding: 12px;
+      max-height: 320px;
+      overflow: auto;
+      background: var(--bg-subtle);
+      border-radius: 10px;
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-primary);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .theme-remove-btn { color: var(--red-text); padding: 6px 0 0; }
     .settings-number {
       width: 72px;
       padding: 8px;
@@ -3634,8 +3681,130 @@ var qrcode = function() {
   <div class="stats-section">
     <div class="settings-card">
       <p class="settings-help">Changes how every page looks. The words and features stay the same.</p>
+      <p class="settings-lock-note" id="themeForcedNote" hidden>
+        This page is showing Classic because you opened it with ?theme=classic. Guests
+        still see the theme selected below.
+      </p>
       <!-- Filled from the Worker's theme list by renderThemeOptions. -->
-      <div id="themeOptions"></div>
+      <div id="themeOptions" data-saved-theme="{{SAVED_THEME}}"></div>
+    </div>
+  </div>
+  <div class="stats-section">
+    <h3>Your own theme</h3>
+    <div class="settings-card">
+      <p class="settings-help">
+        Have Claude design a theme from your colours, fonts or a mockup, then import
+        the CSS file it makes. Imported themes are saved on your site — no GitHub or
+        redeploy needed — and appear in the list above.
+      </p>
+      <div class="settings-panel settings-theme-actions">
+        <button type="button" class="settings-qr-copy-btn" onclick="openSettingsPanel('themeHelpOverlay')">How to make one</button>
+        <button type="button" class="settings-save-btn" onclick="openSettingsPanel('themeImportOverlay')">Import theme</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Opened from Settings → Theme; sits above the Theme screen. -->
+<div class="stats-overlay settings-panel-overlay settings-subpanel-overlay" id="themeHelpOverlay">
+  <div class="stats-overlay-header">
+    <div>
+      <h2>Make your own theme</h2>
+      <p class="stats-tz-note">With Claude, in about five minutes</p>
+    </div>
+    <button class="stats-close" onclick="closeSettingsPanel('themeHelpOverlay')">Back</button>
+  </div>
+  <div class="stats-section">
+    <h3>Steps</h3>
+    <div class="settings-card">
+      <ol class="settings-steps">
+        <li>Describe the look you want below — colours, fonts, a mood — or leave it
+          blank and attach a mockup, invitation or photo in step 3.</li>
+        <li>Tap <strong>Copy prompt</strong>.</li>
+        <li>Open <a class="settings-inline-link" href="https://claude.ai/new" target="_blank" rel="noopener">claude.ai</a>,
+          paste the prompt, attach any pictures, and send it. Claude replies with
+          one CSS file.</li>
+        <li>Download that file, or copy its contents, then come back here and tap
+          <strong>Import theme</strong>.</li>
+        <li>Check its thumbnail in the theme list, then select it. Guests see it on
+          their next visit.</li>
+      </ol>
+      <p class="settings-help">
+        Want changes? Ask Claude in the same chat, then import again with the same
+        name — it replaces the old version.
+      </p>
+    </div>
+  </div>
+  <div class="stats-section">
+    <h3>Prompt</h3>
+    <div class="settings-card">
+      <label class="settings-field">Your theme idea (optional)
+        <textarea id="themeIdeaInput" class="settings-input settings-field-input settings-textarea settings-textarea-short"
+          rows="3" placeholder="e.g. Sage green and blush, botanical line drawings, an elegant serif for our names"></textarea>
+      </label>
+      <div class="settings-theme-actions settings-help-gap">
+        <button type="button" class="settings-save-btn" onclick="copyThemePrompt()">Copy prompt</button>
+        <button type="button" class="settings-qr-copy-btn" onclick="openSettingsPanel('themeImportOverlay')">Import theme</button>
+      </div>
+      <details class="settings-prompt">
+        <summary>Show the prompt</summary>
+        <pre class="settings-prompt-text" id="themePromptPreview"></pre>
+      </details>
+    </div>
+  </div>
+  <div class="stats-section">
+    <h3>If something goes wrong</h3>
+    <div class="settings-card">
+      <p class="settings-help">
+        A theme only changes the look, but it styles this admin page too. If one ever
+        makes this page hard to use, open <span class="settings-code" id="themeSafeLink"></span>
+        to see it in Classic, then choose another theme or remove that one.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- Opened from Settings → Theme; sits above the Theme screen. -->
+<div class="stats-overlay settings-panel-overlay settings-subpanel-overlay" id="themeImportOverlay">
+  <div class="stats-overlay-header">
+    <div>
+      <h2>Import theme</h2>
+      <p class="stats-tz-note">A CSS file, from Claude or anyone else</p>
+    </div>
+    <button class="stats-close" onclick="closeSettingsPanel('themeImportOverlay')">Back</button>
+  </div>
+  <div class="stats-section">
+    <div class="settings-card">
+      <form class="settings-panel settings-import-form" id="themeImportForm"
+        onsubmit="event.preventDefault(); importTheme();">
+        <div class="settings-theme-actions">
+          <button type="button" class="settings-qr-copy-btn" onclick="document.getElementById('themeFileInput').click()">Choose a .css file</button>
+          <span class="settings-option-desc" id="themeFileName"></span>
+          <input type="file" id="themeFileInput" class="settings-file-input" accept=".css,text/css,text/plain">
+        </div>
+        <label class="settings-field">…or paste the CSS
+          <textarea id="themeCssInput" class="settings-input settings-field-input settings-textarea"
+            rows="8" spellcheck="false" autocapitalize="off" autocomplete="off"
+            placeholder="/* @theme&#10;name: …&#10;description: …&#10;*/"></textarea>
+        </label>
+        <label class="settings-field">Name
+          <input id="themeNameInput" class="settings-input settings-field-input" maxlength="40" autocomplete="off">
+        </label>
+        <label class="settings-field">Description
+          <input id="themeDescInput" class="settings-input settings-field-input" maxlength="120" autocomplete="off"
+            placeholder="One line, shown under the name">
+        </label>
+        <div class="settings-loc-actions">
+          <span class="settings-option-desc">Name and description fill in from the file.</span>
+          <button type="submit" class="settings-save-btn" id="themeImportBtn">Import</button>
+        </div>
+      </form>
+      <p class="settings-help settings-help-gap settings-warning" id="themeImportError" hidden></p>
+      <p class="settings-help settings-help-gap">
+        Importing doesn’t switch the site to the theme — choose it in the list once
+        you’ve seen its thumbnail. A theme with the same name as one you imported
+        before replaces it.
+      </p>
     </div>
   </div>
 </div>
@@ -3687,6 +3856,69 @@ var qrcode = function() {
 
 <script type="application/json" id="locationsData">{{LOCATIONS_JSON}}</script>
 <script type="application/json" id="themesData">{{THEMES_JSON}}</script>
+<!-- Settings → Theme → Make your own: copied for the user to paste into Claude.
+     %IDEA% is filled from the idea box. Keep it in step with docs/THEMES.md and
+     the import checks in src/worker.js (customThemeCssProblem). -->
+<script type="text/plain" id="themePromptTemplate">I'd like a new theme for my wedding photo-sharing site, built on the open-source wedding-photos-kit. A theme is one CSS file that I'll import on the site's admin page. Please write it.
+
+My theme: %IDEA%
+
+If you can open links, read these first. They are the real pages and a finished theme to follow:
+- Theme guide: https://raw.githubusercontent.com/OzzieBuilds/wedding-photos-kit/main/docs/THEMES.md
+- Reference theme (copy its structure): https://raw.githubusercontent.com/OzzieBuilds/wedding-photos-kit/main/public/themes/redrock.css
+- Guest page: https://raw.githubusercontent.com/OzzieBuilds/wedding-photos-kit/main/public/index.html
+- Password page: https://raw.githubusercontent.com/OzzieBuilds/wedding-photos-kit/main/public/gate.html
+- Admin page: https://raw.githubusercontent.com/OzzieBuilds/wedding-photos-kit/main/public/admin.html
+If you can't open them, work from the summary below.
+
+RULES
+1. CSS only, and look only. Don't hide, add or reword any text, and don't hide buttons or controls. Content added with ::before/::after must be decorative.
+2. Light and dark: define both, using @media (prefers-color-scheme: dark).
+3. Readable: text at least 4.5:1 contrast against its background, including button text on the button colour. The photo lightbox is always on black.
+4. Fonts only from Google Fonts, loaded with @import url('https://fonts.googleapis.com/css2?family=...&display=swap'); placed right after the header comment, before any other rule. Images only as inline data: URIs (SVG works well and stays small). The site blocks images and fonts from anywhere else.
+5. Never write the text </style anywhere in the file, and keep it under 200KB.
+6. Guests are on phones: design for 390px wide first.
+
+HOW STYLING WORKS
+- The file is added after each page's own styles, so its rules win over page rules of equal specificity. To beat a more specific page rule, repeat a class (e.g. .filter-row.filter-row) rather than using !important. Inline style="" attributes need !important.
+- Every page's <html> carries data-page="guest", "admin", "gate" (guest password page) or "admin-gate" (admin sign-in). Scope page-specific rules with e.g. [data-page="guest"] .header h1.
+- Mapping the shared tokens below in :root recolours the whole site. Define your own palette variables with a short prefix first (e.g. --gd-bg), then map the tokens to them. Component rules on top of that change shape and layout.
+
+SHARED TOKENS (map in :root, and again for dark)
+--bg-primary, --bg-secondary: page backgrounds
+--bg-card, --bg-input, --bg-subtle: cards, inputs, quiet panels
+--text-primary, --text-secondary, --text-tertiary: text, three levels
+--border, --border-strong: hairlines; input borders
+--accent-btn, --on-accent: primary buttons and their text; selected checkmarks
+--accent-bg, --accent-border, --accent-text: active pills, selected locations, secondary buttons
+--accent-strong: icons on --accent-bg, radio buttons, the session banner
+--accent-btn-hover, --accent-ring: admin sign-in button hover and focus ring
+--red-bg, --red-border, --red-text, --red-btn: errors, delete buttons
+--danger, --error, --error-bg: sign-in and password-page errors
+--amber-bg, --amber-border, --amber-text, --amber-warn: upload warnings; the WiFi note
+--green-bg, --success-icon, --success-check: upload-complete icon; download ticks
+--skeleton-base, --skeleton-sheen: loading photo tiles
+--like-fill, --on-like: the liked pill in the lightbox (on black)
+--confetti-colors: comma-separated colours for first-place confetti
+
+HOOKS THE PAGES PROVIDE
+- .theme-scene: decorative artwork, hidden by default. .theme-scene-hero tops the guest home card and the password page; .theme-scene-slim tops the gallery and admin. Give it display: block, a height and a background (one SVG data URI works well).
+- .couple-first, .couple-rest: the couple's names as two spans ("Alex", "& Sam") in the guest and password-page headings; display: block on .couple-rest stacks them.
+- .upload-cta, .upload-note, .upload-note-warn: the "Add your photos" block and the notes under it on the guest home page.
+- .settings-*: every admin Settings element has a class.
+- .like-row, .like-btn, .like-count, .own-photo-note: the like pill in the lightbox.
+- The gallery filter row has two fixed pills plus 1–4 location pills; make it work for every count.
+- The bulk bar and the rename dialog share button classes, so scope bulk-bar styles with .bulk-bar.
+
+OUTPUT
+Reply with the complete CSS file in one code block, starting with exactly this header so the import screen can read the name:
+
+/* @theme
+name: <Theme name, up to 40 characters>
+description: <one line, under 120 characters>
+*/
+
+After the code block, describe the look in two or three sentences. If you can, also give it to me as a downloadable .css file.</script>
 <script>
   function showSessionBanner() {
     const banner = document.getElementById('sessionBanner');
@@ -4608,6 +4840,8 @@ var qrcode = function() {
   function openSettingsPanel(id) {
     if (id === 'guestAccessOverlay') renderGuestAccess();
     if (id === 'themeOverlay') loadThemePreviews();
+    if (id === 'themeHelpOverlay') renderThemePrompt();
+    if (id === 'themeImportOverlay') resetThemeImport();
     if (id === 'locationsOverlay') {
       renderLocationRows(LOCATIONS);
       updateLocationsLock();
@@ -4795,7 +5029,10 @@ var qrcode = function() {
   // A theme only changes the look, and pages pick it up when they load, so a
   // save reloads this page to show it straight away.
   const THEMES = JSON.parse(document.getElementById('themesData').textContent);
-  const currentTheme = document.documentElement.getAttribute('data-theme');
+  // The saved theme. This page is drawn in it too, except under ?theme=classic.
+  const currentTheme = document.getElementById('themeOptions').dataset.savedTheme;
+  document.getElementById('themeForcedNote').hidden =
+    document.documentElement.getAttribute('data-theme') === currentTheme;
 
   function renderThemeOptions() {
     const container = document.getElementById('themeOptions');
@@ -4834,6 +5071,15 @@ var qrcode = function() {
       desc.className = 'settings-option-desc';
       desc.textContent = theme.description;
       text.append(head, desc);
+      if (theme.custom) {
+        // A button is interactive content, so tapping it doesn't pick the radio.
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'settings-link-btn theme-remove-btn';
+        remove.textContent = 'Remove';
+        remove.addEventListener('click', function(e) { e.preventDefault(); removeTheme(theme); });
+        text.appendChild(remove);
+      }
       option.append(thumb, text);
       container.appendChild(option);
     });
@@ -4860,6 +5106,157 @@ var qrcode = function() {
     } catch (err) {
       showToast('Could not update theme');
       renderThemeOptions();
+    }
+  }
+
+  // ─── Settings → Theme → your own theme ───
+  // A theme can be one CSS file imported here, stored by the Worker in D1, so
+  // nobody has to touch GitHub or redeploy. The prompt helps Claude write one.
+  const THEME_HEADER = /\/\*\s*@theme\b([\s\S]*?)\*\//;
+  const THEME_MAX_BYTES = 200 * 1024;  // CUSTOM_THEME_MAX_BYTES in the Worker
+
+  function themePrompt() {
+    const idea = document.getElementById('themeIdeaInput').value.trim();
+    return document.getElementById('themePromptTemplate').textContent.trim().replace('%IDEA%', function() {
+      return idea || '[Describe the look: colours, fonts, a mood, or say you have attached a mockup, invitation or photo]';
+    });
+  }
+
+  function renderThemePrompt() {
+    document.getElementById('themePromptPreview').textContent = themePrompt();
+    document.getElementById('themeSafeLink').textContent = location.origin + '/admin?theme=classic';
+  }
+  document.getElementById('themeIdeaInput').addEventListener('input', renderThemePrompt);
+
+  async function copyThemePrompt() {
+    try {
+      await navigator.clipboard.writeText(themePrompt());
+      showToast('Prompt copied — paste it into Claude');
+    } catch (err) {
+      // Open the prompt so it can be selected by hand instead.
+      document.querySelector('#themeHelpOverlay .settings-prompt').open = true;
+      showToast('Could not copy — select the prompt below instead');
+    }
+  }
+
+  /** Mirrors customThemeId in the Worker: "Garden Party!" → "garden-party". */
+  function customThemeId(name) {
+    return name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
+  }
+
+  /** Claude's reply is often pasted with its ``` fences; the CSS is inside them. */
+  function stripCodeFences(text) {
+    const fenced = text.match(/^\s*```[a-z]*\s*\n([\s\S]*?)\n\s*```\s*$/i);
+    return fenced ? fenced[1] : text;
+  }
+
+  // Fills name and description from the file's header, unless typed by hand.
+  let themeFieldsTyped = false;
+  function fillThemeFieldsFromCss() {
+    if (themeFieldsTyped) return;
+    const header = (stripCodeFences(document.getElementById('themeCssInput').value).match(THEME_HEADER) || [])[1] || '';
+    const field = function(key) {
+      const m = header.match(new RegExp('^\\s*\\*?\\s*' + key + '\\s*:\\s*(.+?)\\s*$', 'im'));
+      return m ? m[1] : '';
+    };
+    document.getElementById('themeNameInput').value = field('name').slice(0, 40);
+    document.getElementById('themeDescInput').value = field('description').slice(0, 120);
+  }
+
+  function showThemeImportError(message) {
+    const el = document.getElementById('themeImportError');
+    el.textContent = message;
+    el.hidden = !message;
+  }
+
+  function resetThemeImport() {
+    document.getElementById('themeImportForm').reset();
+    document.getElementById('themeFileName').textContent = '';
+    themeFieldsTyped = false;
+    showThemeImportError('');
+  }
+
+  document.getElementById('themeCssInput').addEventListener('input', function() {
+    document.getElementById('themeFileName').textContent = '';
+    fillThemeFieldsFromCss();
+  });
+  ['themeNameInput', 'themeDescInput'].forEach(function(id) {
+    document.getElementById(id).addEventListener('input', function() { themeFieldsTyped = true; });
+  });
+  document.getElementById('themeFileInput').addEventListener('change', async function(e) {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > THEME_MAX_BYTES) { showThemeImportError('That file is over 200KB — is it the right one?'); return; }
+    try {
+      document.getElementById('themeCssInput').value = await file.text();
+      document.getElementById('themeFileName').textContent = file.name;
+      showThemeImportError('');
+      fillThemeFieldsFromCss();
+    } catch (err) {
+      showThemeImportError('Could not read that file');
+    }
+  });
+
+  async function importTheme() {
+    const css = stripCodeFences(document.getElementById('themeCssInput').value);
+    const name = document.getElementById('themeNameInput').value.trim();
+    const description = document.getElementById('themeDescInput').value.trim();
+    if (!css.trim()) { showThemeImportError('Choose a .css file or paste the CSS first'); return; }
+    if (!name) { showThemeImportError('Give the theme a name'); return; }
+    const existing = THEMES.find(function(t) { return t.custom && t.id === customThemeId(name); });
+    if (existing && !confirm('Replace your theme "' + existing.name + '" with this one?')) return;
+    const btn = document.getElementById('themeImportBtn');
+    btn.disabled = true;
+    showThemeImportError('');
+    try {
+      const res = await fetch(WORKER_URL + '/theme/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, description: description, css: css })
+      });
+      const data = await res.json().catch(function() { return {}; });
+      if (!res.ok) { showThemeImportError(data.error || 'Could not import the theme'); return; }
+      // Replacing the live theme changes this page too, so show it now.
+      if (data.theme.id === currentTheme) {
+        showToast('Theme updated');
+        setTimeout(function() { window.location.reload(); }, 600);
+        return;
+      }
+      const i = THEMES.findIndex(function(t) { return t.id === data.theme.id; });
+      if (i === -1) THEMES.push(data.theme); else THEMES[i] = data.theme;
+      renderThemeOptions();
+      loadThemePreviews();
+      document.getElementById('themeImportOverlay').classList.remove('open');
+      document.getElementById('themeHelpOverlay').classList.remove('open');
+      showToast(data.replaced ? 'Theme replaced' : 'Theme imported — select it to use it');
+    } catch (err) {
+      showThemeImportError('Could not import the theme');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function removeTheme(theme) {
+    const live = theme.id === currentTheme;
+    if (!confirm('Remove the theme "' + theme.name + '"?' +
+                 (live ? '\n\nIt’s the one guests see now, so the site will go back to Classic.' : ''))) return;
+    try {
+      const res = await fetch(WORKER_URL + '/theme/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: theme.id })
+      });
+      if (!res.ok) throw new Error('remove failed');
+      showToast('Theme removed');
+      if (live) { setTimeout(function() { window.location.reload(); }, 600); return; }
+      THEMES.splice(THEMES.indexOf(theme), 1);
+      renderThemeOptions();
+      loadThemePreviews();
+      updateSettingsSummaries();
+    } catch (err) {
+      showToast('Could not remove the theme');
     }
   }
 

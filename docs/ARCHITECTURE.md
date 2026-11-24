@@ -49,6 +49,7 @@ transaction, so a loser fails once and the next request sees the new version.
 |---|---|
 | `photos` | One row per upload: R2 key, uploader name, location, time, star, uploading device |
 | `likes` | One row per photo per device |
+| `themes` | Themes imported in Settings → Theme: id, name, description, CSS |
 | `config` | Every setting as key/value: `site_mode`, `guest_passphrase`, `admin_password_hash`, `couple_name_1/2`, `locations`, `theme`, `stats_timezone`, `featured_min_likes`, `sweep_enabled`, `schema_version` |
 
 ---
@@ -118,7 +119,9 @@ everyone out at the next deploy.
 | `/featured-min` | POST | Admin | Likes needed for Featured |
 | `/couple-names` | GET / POST | Admin | The couple's names |
 | `/locations` | POST | Admin | Upload locations (refused with 409 while photos exist) |
-| `/theme` | POST | Admin | Display theme |
+| `/theme` | POST | Admin | Display theme (built-in or imported) |
+| `/theme/import` | POST | Admin | Add an imported theme, or replace the one with the same name |
+| `/theme/delete` | POST | Admin | Remove an imported theme; the site goes back to Classic if it was live |
 | `/admin/theme-preview?theme=<id>` | GET | Admin | The guest home page in any theme, for the Settings → Theme thumbnails. The only page that can be framed, and only by this site |
 | `/guest-passphrase` | GET / POST | Admin | Read / change the guest passphrase |
 | `/robots.txt` | GET | — | Blocks all crawlers |
@@ -164,7 +167,7 @@ setup, which sits behind buttons so a growing list never pushes the rest down.
 | **Featured** | How many guest likes put a photo in Featured |
 | **Wedding setup → Couple** | The couple's names, shown on every guest page as "First & Second" |
 | **Wedding setup → Guest access ›** | Site address (read-only), passphrase, invite link, and the invite QR code to download or copy — see [Sign-in](#sign-in). The row shows the passphrase, or "Not set" |
-| **Wedding setup → Theme ›** | The display theme — see [Themes](#themes) |
+| **Wedding setup → Theme ›** | The display theme, and importing your own — see [Themes](#themes) |
 | **Wedding setup → Locations ›** | The upload locations — see below |
 | **Wedding setup → Time zone** | The zone admin stats use; saved from the first admin device, changeable |
 | **Admin password** | Change it (needs the current one). Hidden, with a pointer to Cloudflare, while the `ADMIN_PASSWORD` secret is set |
@@ -278,6 +281,24 @@ are never affected by a theme, and a theme's rules override Classic by source
 order without needing a theme prefix. The registry is `THEMES` in
 `src/worker.js`. To build a new one, see
 [THEMES.md](THEMES.md).
+
+**Imported themes.** A theme can also be added from the admin page, with no
+code change or redeploy: Settings → Theme → **Import theme** takes one CSS file
+(chosen or pasted) and stores it in the `themes` table, so it survives
+redeploys and updates. **How to make one** walks through it and copies a
+ready-made prompt for Claude. An imported theme is listed, previewed, chosen
+and injected exactly like a built-in one; pages fetch the stylesheet of the
+live theme only, in the same D1 round trip as the rest of the page config.
+
+Imported CSS goes into every page, so the Worker checks it on import
+(`customThemeCssProblem`): no `</style` (and `</style` is neutralised again on
+render), `@import` only from `fonts.googleapis.com`, `url()` only `data:` or
+Google Fonts, at most 200KB, and at most 20 themes. The CSP enforces the same
+limits regardless. A name can't match a built-in theme; importing an existing
+name replaces it. Removing the live theme puts the site back on Classic.
+
+If a theme ever makes the admin page unusable, `/admin?theme=classic` draws it
+in Classic (guests still see the saved theme), so it can be switched or removed.
 
 ---
 

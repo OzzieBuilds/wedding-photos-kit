@@ -361,7 +361,10 @@ async function handleRequest(request, env, ctx) {
     }
     // Same refresh as the guest cookie above.
     const refreshedAdmin = await generateAdminToken(env.adminSecret);
-    return new Response(renderPage(ADMIN_HTML, await getPageConfig(env)), {
+    // ?theme=classic draws this page in Classic whatever is saved, so an
+    // imported theme that breaks it can still be switched off.
+    const forceClassic = url.searchParams.get('theme') === DEFAULT_THEME;
+    return new Response(renderPage(ADMIN_HTML, { ...await getPageConfig(env), forceClassic }), {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Set-Cookie': `admin_auth=${refreshedAdmin}; ${ADMIN_COOKIE_ATTRS}`
@@ -523,6 +526,16 @@ async function handleRequest(request, env, ctx) {
     return handleSetTheme(request, env);
   }
 
+  if (url.pathname === '/theme/import' && request.method === 'POST') {
+    if (!hasAdminSession) return new Response('Unauthorized', { status: 401 });
+    return handleImportTheme(request, env);
+  }
+
+  if (url.pathname === '/theme/delete' && request.method === 'POST') {
+    if (!hasAdminSession) return new Response('Unauthorized', { status: 401 });
+    return handleDeleteTheme(request, env);
+  }
+
   if (url.pathname === '/locations' && request.method === 'POST') {
     if (!hasAdminSession) return new Response('Unauthorized', { status: 401 });
     return handleSetLocations(request, env);
@@ -555,7 +568,17 @@ async function handleRequest(request, env, ctx) {
  *      database from the previous version to this one.
  * Existing deployments pick the upgrade up on their next request after deploying.
  */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
+
+// Themes imported in Settings → Theme (see handleImportTheme). Kept in the
+// database rather than the code, so they survive redeploys and updates.
+const THEMES_TABLE = `CREATE TABLE IF NOT EXISTS themes (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    css         TEXT NOT NULL,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`;
 
 const SCHEMA_STATEMENTS = [
   // Display sizes are derived from file_key by convention
@@ -581,10 +604,13 @@ const SCHEMA_STATEMENTS = [
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
   )`,
+  THEMES_TABLE,
 ];
 
 /** { version: [statements] } — each takes a database from version - 1 to version. */
-const SCHEMA_UPGRADES = {};
+const SCHEMA_UPGRADES = {
+  2: [THEMES_TABLE],
+};
 
 /**
  * Brings the database up to SCHEMA_VERSION in one transaction, so a failure
@@ -876,23 +902,28 @@ function escapeHtml(str) {
  * Escaping every `<` is what stops a label containing </script> from closing
  * it early; JSON.parse reads \u003c back as `<`.
  */
-function renderPage(html, { names, locations, theme = DEFAULT_THEME, guestPassphrase = '', statsTimezone = '' }) {
+function renderPage(html, {
+  names, locations, theme = DEFAULT_THEME, customThemes = [], forceClassic = false,
+  guestPassphrase = '', statsTimezone = '',
+}) {
   const couple = escapeHtml(coupleDisplay(names));
   const coupleHeading = coupleHeadingHtml(names);
   const locationsJson = JSON.stringify(locations).replace(/</g, '\\u003c');
-  const themeId = Object.hasOwn(THEMES, theme) ? theme : DEFAULT_THEME;
-  const themesJson = JSON.stringify(
-    Object.entries(THEMES).map(([id, t]) => ({ id, name: t.name, description: t.description }))
-  ).replace(/</g, '\\u003c');
+  // The saved theme, and the one this page is drawn in: they differ only for
+  // /admin?theme=classic, the way back from an imported theme that breaks it.
+  const saved = resolveTheme(theme, customThemes);
+  const shown = forceClassic ? resolveTheme(DEFAULT_THEME) : saved;
+  const themesJson = JSON.stringify(themeList(customThemes)).replace(/</g, '\\u003c');
   // Replacer functions, not strings: a string replacement reads `$&` and `$'`
   // as patterns, so a name or label containing `$` would come out mangled.
   return html
     .replaceAll('{{COUPLE}}', () => couple)
     .replaceAll('{{COUPLE_HEADING}}', () => coupleHeading)
     .replaceAll('{{LOCATIONS_JSON}}', () => locationsJson)
-    .replaceAll('{{THEME}}', () => themeId)
+    .replaceAll('{{THEME}}', () => shown.id)
+    .replaceAll('{{SAVED_THEME}}', () => saved.id)
     .replaceAll('{{THEMES_JSON}}', () => themesJson)
-    .replaceAll('{{THEME_HEAD}}', () => THEMES[themeId].head)
+    .replaceAll('{{THEME_HEAD}}', () => shown.head)
     // Empty until saved; the admin page then uses the browser's own zone.
     .replaceAll('{{STATS_TZ}}', () => escapeHtml(statsTimezone))
     // Only the signed-in guest page carries this (for its invite link); the
@@ -912,20 +943,30 @@ function coupleHeadingHtml({ name1, name2 }) {
 }
 
 /**
- * Everything a page needs from config, in one D1 read — page loads already pay
- * for the site-mode lookup, and this keeps it to one more rather than one per
- * setting.
+ * Everything a page needs from config, in one D1 round trip — page loads
+ * already pay for the site-mode lookup, and this keeps it to one more rather
+ * than one per setting. Imported themes come back as a list for Settings, with
+ * the stylesheet of the active one only, so the rest cost no bandwidth.
  */
 async function getPageConfig(env) {
   try {
-    const { results } = await env.DB.prepare(
-      'SELECT key, value FROM config WHERE key IN (?, ?, ?, ?, ?)'
-    ).bind('couple_name_1', 'couple_name_2', 'locations', 'theme', 'stats_timezone').all();
-    const byKey = Object.fromEntries((results || []).map(r => [r.key, r.value]));
+    const [config, themes] = await env.DB.batch([
+      env.DB.prepare(
+        'SELECT key, value FROM config WHERE key IN (?, ?, ?, ?, ?)'
+      ).bind('couple_name_1', 'couple_name_2', 'locations', 'theme', 'stats_timezone'),
+      env.DB.prepare(
+        `SELECT id, name, description,
+           CASE WHEN id = (SELECT value FROM config WHERE key = 'theme') THEN css END AS css
+         FROM themes ORDER BY created_at, rowid`
+      ),
+    ]);
+    const byKey = Object.fromEntries((config.results || []).map(r => [r.key, r.value]));
     return {
       names: { name1: byKey.couple_name_1 || '', name2: byKey.couple_name_2 || '' },
       locations: parseLocations(byKey.locations),
-      theme: Object.hasOwn(THEMES, byKey.theme ?? '') ? byKey.theme : DEFAULT_THEME,
+      // Resolved by renderPage, which falls back to Classic for anything unknown.
+      theme: byKey.theme || DEFAULT_THEME,
+      customThemes: themes.results || [],
       statsTimezone: byKey.stats_timezone || '',
       // Already resolved for this request (see withRequestConfig).
       guestPassphrase: env.guestPassphrase,
@@ -948,7 +989,8 @@ async function getPageConfig(env) {
  * any theme prefix — the pages scope them with html[data-page].
  *
  * Text and behaviour never change with the theme, only the look. To add one,
- * write public/themes/<id>.css and register it here.
+ * write public/themes/<id>.css and register it here, or import it in Settings
+ * (see Imported themes below).
  */
 const DEFAULT_THEME = 'classic';
 const THEMES = {
@@ -968,7 +1010,33 @@ const THEMES = {
 };
 
 /**
- * The guest home page in any registered theme, whatever theme is live, for the
+ * A theme id as { id, head }: built in, imported (when its stylesheet was
+ * loaded — see getPageConfig), or Classic for anything else. Imported CSS was
+ * checked on import; neutralising `</style` again here means a row edited by
+ * hand still can't end the style element and inject markup.
+ */
+function resolveTheme(id, customThemes = []) {
+  if (Object.hasOwn(THEMES, id)) return { id, head: THEMES[id].head };
+  const custom = customThemes.find(t => t.id === id && typeof t.css === 'string');
+  if (custom) return { id, head: `<style>${custom.css.replace(/<\/style/gi, '<\\/style')}</style>` };
+  return { id: DEFAULT_THEME, head: '' };
+}
+
+/** Every theme for Settings → Theme: built-in first, then imported, oldest first. */
+function themeList(customThemes = []) {
+  return [
+    ...Object.entries(THEMES).map(([id, t]) => ({ id, name: t.name, description: t.description, custom: false })),
+    ...customThemes.map(t => ({ id: t.id, name: t.name, description: t.description, custom: true })),
+  ];
+}
+
+/** One imported theme with its stylesheet, or null. */
+async function getCustomTheme(env, id) {
+  return env.DB.prepare('SELECT id, name, description, css FROM themes WHERE id = ?').bind(id).first();
+}
+
+/**
+ * The guest home page in any theme, whatever theme is live, for the
  * thumbnails in Settings → Theme. Admin-only, since it works even while the
  * site is closed to guests, and rendered without the passphrase so the page
  * never carries it. The admin page frames it sandboxed with scripts off, so
@@ -977,9 +1045,12 @@ const THEMES = {
 async function handleThemePreview(url, env, hasAdminSession) {
   if (!hasAdminSession) return new Response('Unauthorized', { status: 401 });
   const theme = url.searchParams.get('theme') || '';
-  if (!Object.hasOwn(THEMES, theme)) return new Response('Unknown theme', { status: 404 });
+  const custom = Object.hasOwn(THEMES, theme) ? null : await getCustomTheme(env, theme);
+  if (!Object.hasOwn(THEMES, theme) && !custom) return new Response('Unknown theme', { status: 404 });
   const config = await getPageConfig(env);
-  return new Response(renderPage(HTML, { ...config, theme, guestPassphrase: '' }), {
+  return new Response(renderPage(HTML, {
+    ...config, theme, customThemes: custom ? [custom] : [], guestPassphrase: '',
+  }), {
     headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }
   });
 }
@@ -988,13 +1059,120 @@ async function handleThemePreview(url, env, hasAdminSession) {
 async function handleSetTheme(request, env) {
   try {
     const { theme } = await request.json();
-    if (typeof theme !== 'string' || !Object.hasOwn(THEMES, theme)) {
+    if (typeof theme !== 'string' || !theme ||
+        (!Object.hasOwn(THEMES, theme) && !await getCustomTheme(env, theme))) {
       return json({ error: 'Unknown theme' }, 400);
     }
     await env.DB.prepare(
       'INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
     ).bind('theme', theme).run();
     return json({ success: true, theme });
+  } catch (err) {
+    return json({ error: err.message }, 500);
+  }
+}
+
+// ─── Imported themes ──────────────────────────────────────────────────────────
+
+/**
+ * A theme can also be imported in Settings → Theme as one CSS file, with no
+ * redeploy: the stylesheet is stored in D1 and injected exactly like a
+ * built-in one. The admin page offers a prompt for making one with Claude.
+ *
+ * Imported CSS goes into every page, so it is held to the same rules as a
+ * built-in theme (docs/THEMES.md) and checked here rather than trusted: it
+ * can't end its <style> element, and it may only load fonts from Google
+ * Fonts. The Content-Security-Policy would block anything else anyway; these
+ * checks say so at import instead of leaving a theme silently half-working.
+ */
+const CUSTOM_THEME_MAX_BYTES = 200 * 1024;  // Red Rock, with its artwork, is about 30KB
+const CUSTOM_THEME_MAX_COUNT = 20;
+const CUSTOM_THEME_NAME_MAX = 40;
+const CUSTOM_THEME_DESCRIPTION_MAX = 120;
+const FONT_HOSTS = new Set(['fonts.googleapis.com', 'fonts.gstatic.com']);
+
+/** The id for an imported theme's name: "Garden Party!" → "garden-party". */
+function customThemeId(name) {
+  return name.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
+}
+
+/** Why this CSS can't be imported, or '' if it can. */
+function customThemeCssProblem(css) {
+  if (typeof css !== 'string' || !css.trim()) return 'The theme has no CSS';
+  if (new TextEncoder().encode(css).length > CUSTOM_THEME_MAX_BYTES) {
+    return `The CSS is over ${CUSTOM_THEME_MAX_BYTES / 1024}KB`;
+  }
+  if (/<\/style/i.test(css)) return 'The CSS can’t contain the text </style';
+  // Comments can't load anything, and may mention URLs freely.
+  const code = css.replace(/\/\*[\s\S]*?(\*\/|$)/g, '');
+  for (const m of code.matchAll(/@import\s+(?:url\(\s*)?['"]?\s*([^'")\s;]*)/gi)) {
+    let host = '';
+    try { host = new URL(m[1]).hostname; } catch {}
+    if (host !== 'fonts.googleapis.com') return 'Fonts can only be imported from Google Fonts (fonts.googleapis.com)';
+  }
+  for (const m of code.matchAll(/url\(\s*['"]?\s*((?:https?:)?\/\/[^'")\s]*)/gi)) {
+    let host = '';
+    try { host = new URL(m[1], 'https://x').hostname; } catch {}
+    if (!FONT_HOSTS.has(host)) {
+      return 'Images must be inline data: URIs and fonts must come from Google Fonts — the site blocks files from other websites';
+    }
+  }
+  return '';
+}
+
+/**
+ * Adds an imported theme, or replaces the one with the same name. Doesn't
+ * switch to it: the admin picks it from the list, after seeing its thumbnail.
+ */
+async function handleImportTheme(request, env) {
+  try {
+    const body = await request.json();
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const description = typeof body.description === 'string' ? body.description.trim() : '';
+    if (!name || name.length > CUSTOM_THEME_NAME_MAX) {
+      return json({ error: `Give the theme a name of up to ${CUSTOM_THEME_NAME_MAX} characters` }, 400);
+    }
+    if (description.length > CUSTOM_THEME_DESCRIPTION_MAX) {
+      return json({ error: `Keep the description to ${CUSTOM_THEME_DESCRIPTION_MAX} characters` }, 400);
+    }
+    const id = customThemeId(name);
+    if (!id) return json({ error: 'The name needs at least one letter or number' }, 400);
+    if (Object.entries(THEMES).some(([builtIn, t]) => builtIn === id || customThemeId(t.name) === id)) {
+      return json({ error: 'A built-in theme already has that name' }, 400);
+    }
+    const problem = customThemeCssProblem(body.css);
+    if (problem) return json({ error: problem }, 400);
+
+    const existing = await getCustomTheme(env, id);
+    if (!existing) {
+      const { n } = await env.DB.prepare('SELECT COUNT(*) AS n FROM themes').first();
+      if (n >= CUSTOM_THEME_MAX_COUNT) {
+        return json({ error: `You can import up to ${CUSTOM_THEME_MAX_COUNT} themes — remove one first` }, 400);
+      }
+    }
+    await env.DB.prepare(
+      `INSERT INTO themes (id, name, description, css) VALUES (?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET name = excluded.name, description = excluded.description, css = excluded.css`
+    ).bind(id, name, description, body.css).run();
+    return json({ success: true, theme: { id, name, description, custom: true }, replaced: Boolean(existing) });
+  } catch (err) {
+    return json({ error: err.message }, 500);
+  }
+}
+
+/** Removes an imported theme. If it was the live one, the site goes back to Classic. */
+async function handleDeleteTheme(request, env) {
+  try {
+    const { theme } = await request.json();
+    if (typeof theme !== 'string' || !theme || Object.hasOwn(THEMES, theme)) {
+      return json({ error: 'Only imported themes can be removed' }, 400);
+    }
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM themes WHERE id = ?').bind(theme),
+      env.DB.prepare("UPDATE config SET value = ? WHERE key = 'theme' AND value = ?").bind(DEFAULT_THEME, theme),
+    ]);
+    return json({ success: true });
   } catch (err) {
     return json({ error: err.message }, 500);
   }

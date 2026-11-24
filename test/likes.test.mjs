@@ -41,7 +41,8 @@ function makeD1() {
   const db = new DatabaseSync(':memory:');
   // The same statements a fresh deployment runs (SCHEMA_STATEMENTS in the Worker).
   const schema = new Function(
-    `${workerSource.match(/^const SCHEMA_STATEMENTS = \[[\s\S]*?^\];$/m)[0]} return SCHEMA_STATEMENTS;`
+    `${workerSource.match(/^const THEMES_TABLE = `[\s\S]*?`;$/m)[0]}
+     ${workerSource.match(/^const SCHEMA_STATEMENTS = \[[\s\S]*?^\];$/m)[0]} return SCHEMA_STATEMENTS;`
   )();
   db.exec(schema.join(';\n'));
   function statement(sql, args = []) {

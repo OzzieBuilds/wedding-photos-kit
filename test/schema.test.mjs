@@ -21,17 +21,20 @@ function grab(name) {
   }
   throw new Error(`unbalanced ${name}`);
 }
-// One-line constants, or an array literal closed by `];` at the start of a line.
+// One-line constants, a template literal, or an array or object literal
+// closed by `];` / `};` at the start of a line.
 const grabConst = (name) => (source.match(new RegExp(`^const ${name} = [^\\n]*;$`, 'm'))
-  ?? source.match(new RegExp(`^const ${name} = \\[[\\s\\S]*?^\\];$`, 'm')))[0];
+  ?? source.match(new RegExp(`^const ${name} = \`[\\s\\S]*?\`;$`, 'm'))
+  ?? source.match(new RegExp(`^const ${name} = [\\[{][\\s\\S]*?^[\\]}];$`, 'm')))[0];
 
 const api = new Function(`
+  ${grabConst('THEMES_TABLE')}
   ${grabConst('SCHEMA_VERSION')}
   ${grabConst('SCHEMA_STATEMENTS')}
   ${grabConst('SCHEMA_UPGRADES')}
   ${grab('ensureSchema')}
   ${grab('getRequestConfig')}
-  return { getRequestConfig, ensureSchema, SCHEMA_VERSION, SCHEMA_UPGRADES };
+  return { getRequestConfig, ensureSchema, SCHEMA_VERSION, SCHEMA_UPGRADES, SCHEMA_STATEMENTS };
 `)();
 
 /** A D1 lookalike over SQLite, counting batches so set-up work is visible. */
@@ -78,7 +81,7 @@ await test('an empty database gets every table on the first request', async () =
   assert.deepEqual(tables(DB), []);
   const cfg = await api.getRequestConfig({ DB });
   assert.deepEqual(cfg, { siteMode: 'live', guestPassphrase: '', adminPasswordHash: '' });
-  assert.deepEqual(tables(DB), ['config', 'likes', 'photos']);
+  assert.deepEqual(tables(DB), ['config', 'likes', 'photos', 'themes']);
   const row = DB.raw.prepare("SELECT value FROM config WHERE key = 'schema_version'").get();
   assert.equal(row.value, String(api.SCHEMA_VERSION));
 });
@@ -116,7 +119,7 @@ await test('settings saved before the version was recorded survive set-up', asyn
 await test('running set-up twice at once is harmless', async () => {
   const DB = makeD1();
   await Promise.all([api.getRequestConfig({ DB }), api.getRequestConfig({ DB })]);
-  assert.deepEqual(tables(DB), ['config', 'likes', 'photos']);
+  assert.deepEqual(tables(DB), ['config', 'likes', 'photos', 'themes']);
 });
 
 await test('an outage is not mistaken for an empty database', async () => {
@@ -128,6 +131,18 @@ await test('an outage is not mistaken for an empty database', async () => {
   const cfg = await api.getRequestConfig({ DB });
   assert.deepEqual(cfg, { siteMode: 'live', guestPassphrase: '', adminPasswordHash: '' }, 'fails closed');
   assert.equal(batches, 0, 'must not run set-up, which would skip pending upgrades');
+});
+
+await test('a version 1 database gains the themes table and keeps its data', async () => {
+  const DB = makeD1();
+  for (const sql of ['photos', 'likes', 'config'].map(t => api.SCHEMA_STATEMENTS.find(s => s.includes(`EXISTS ${t} `)))) {
+    DB.raw.exec(sql);
+  }
+  DB.raw.exec("INSERT INTO config (key, value) VALUES ('schema_version', '1'), ('guest_passphrase', 'aspen')");
+  const cfg = await api.getRequestConfig({ DB });
+  assert.equal(cfg.guestPassphrase, 'aspen');
+  assert.deepEqual(tables(DB), ['config', 'likes', 'photos', 'themes']);
+  assert.equal(DB.raw.prepare("SELECT value FROM config WHERE key = 'schema_version'").get().value, '2');
 });
 
 await test('an older database runs only the upgrades it is missing, in order', async () => {
