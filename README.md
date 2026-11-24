@@ -17,6 +17,34 @@ delete and download everything as ZIP files.
 - **No code to edit:** names, locations, passphrase and theme are all set from
   the admin page.
 
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/guest-home-dark.jpg">
+        <img src="docs/images/guest-home.jpg" alt="The guest home page: the couple's names and an Add your photos button" width="260">
+      </picture>
+      <br><sub><b>Guests:</b> add photos from their phone</sub>
+    </td>
+    <td align="center" width="33%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/gallery-dark.jpg">
+        <img src="docs/images/gallery.jpg" alt="The shared gallery, with filters for Featured, Ceremony, Reception and Everything else" width="260">
+      </picture>
+      <br><sub><b>Gallery:</b> filter by moment, like favourites</sub>
+    </td>
+    <td align="center" width="33%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/admin-dark.jpg">
+        <img src="docs/images/admin.jpg" alt="The admin page: photo counts, filters and a grid of photos to star" width="260">
+      </picture>
+      <br><sub><b>Admin:</b> star, rename, delete, download</sub>
+    </td>
+  </tr>
+</table>
+
+<sub>Screenshots use illustrated sample photos. Every page follows the phone's light or dark setting.</sub>
+
 ---
 
 ## What it costs
